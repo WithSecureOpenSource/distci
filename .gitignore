@@ -1,0 +1,6 @@
+*nosetests.xml
+*.swp
+*.pyc
+*.log
+*.egg
+.DS_Store
