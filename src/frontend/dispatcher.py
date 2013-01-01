@@ -2,10 +2,6 @@ import response
 import jobs
 import tasks
 
-config = {
-    "data_directory": "/Users/noushe/CI-proto"
-}
-
 def handle_request(environ, start_response):
     if 'PATH_INFO' not in environ:
         return response.send_error(start_response, 500)
@@ -15,8 +11,6 @@ def handle_request(environ, start_response):
     parts = environ['PATH_INFO'].split('/')[1:]
     if len(parts) == 0:
         return response.send_error(start_response, 400)
-
-    environ['config'] = config
 
     if parts[0] == 'jobs':
         return jobs.handle_request(environ, start_response, method, parts[1:]) 
