@@ -48,7 +48,7 @@ def create_new_task(environ, start_response):
         return response.send_error(start_response, 400, ERROR_INVALID_PAYLOAD)
     os.mkdir(_task_dir(environ, task_id_candidate))
     _save_task_config(environ, task_id_candidate, task_description)
-    return response.send_response(start_response, 200, json.dumps(_prepare_task_data(environ, task_id_candidate)))
+    return response.send_response(start_response, 201, json.dumps(_prepare_task_data(environ, task_id_candidate)))
 
 def delete_task(environ, start_response, task_id):
     if validators.validate_task_id(task_id) != task_id:
