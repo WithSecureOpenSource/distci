@@ -1,4 +1,4 @@
-import response
+from . import response
 
 def get_tags(environ, start_response, job_id):
     print "get tags %s" % job_id

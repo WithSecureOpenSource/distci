@@ -1,6 +1,4 @@
-import response
-
-import jobs_builds_artifacts
+from . import response, jobs_builds_artifacts
 
 def get_builds(environ, start_response, job_id):
     print "get builds %s" % job_id

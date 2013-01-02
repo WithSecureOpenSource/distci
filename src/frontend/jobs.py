@@ -1,7 +1,4 @@
-import response
-
-import jobs_builds
-import jobs_tags
+from . import response, jobs_builds, jobs_tags
 
 def get_jobs(environ, start_response):
     print "get jobs"
@@ -11,15 +8,15 @@ def create_new_job(environ, start_response):
     print "create job"
     return response.send_error(start_response, 501)
 
-def delete_job(environ, start_response, id):
+def delete_job(environ, start_response, job_id):
     print "delete job"
     return response.send_error(start_response, 501)
 
-def get_job_config(environ, start_response, id):
+def get_job_config(environ, start_response, job_id):
     print "get job config"
     return response.send_error(start_response, 501)
 
-def update_job_config(environ, start_response, id):
+def update_job_config(environ, start_response, job_id):
     print "update job config"
     return response.send_error(start_response, 501)
 

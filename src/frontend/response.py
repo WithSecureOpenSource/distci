@@ -1,6 +1,8 @@
+""" Helpers for generating HTTP responses """
+
 import json
 
-status_codes = {
+_STATUS_CODES = {
     200: "OK",
     201: "Created",
     204: "No Content",
@@ -11,7 +13,8 @@ status_codes = {
 }
 
 def send_response(start_response, code, content=None, content_type="application/json"):
-    status = status_codes[code]
+    """ Send generic response """
+    status = _STATUS_CODES[code]
 
     if content is None:
         headers = []
@@ -25,6 +28,7 @@ def send_response(start_response, code, content=None, content_type="application/
     return content
 
 def send_error(start_response, code, message=None):
+    """ Build and send out error response """
     if message is not None:
         content = json.dumps({'error': message})
     else:

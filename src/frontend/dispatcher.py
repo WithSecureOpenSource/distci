@@ -1,8 +1,9 @@
-import response
-import jobs
-import tasks
+""" Top-level request dispatcher """
+
+from . import response, jobs, tasks
 
 def handle_request(environ, start_response):
+    """ Parse top level request for dispatching """
     if 'PATH_INFO' not in environ:
         return response.send_error(start_response, 500)
 
