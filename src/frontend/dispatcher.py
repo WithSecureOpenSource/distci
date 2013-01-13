@@ -1,6 +1,7 @@
 """ Top-level request dispatcher """
 
 from . import response, jobs, tasks
+import logging
 
 def handle_request(environ, start_response):
     """ Parse top level request for dispatching """
@@ -17,5 +18,7 @@ def handle_request(environ, start_response):
         return jobs.handle_request(environ, start_response, method, parts[1:]) 
     elif parts[0] == 'tasks':
         return tasks.handle_request(environ, start_response, method, parts[1:])
+    elif parts[0] == '':
+        return response.send_response(start_response, 204)
 
     return response.send_error(start_response, 400)
