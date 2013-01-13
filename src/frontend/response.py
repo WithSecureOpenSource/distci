@@ -17,7 +17,7 @@ def send_response(start_response, code, content=None, content_type="application/
     status = _STATUS_CODES[code]
 
     if content is None:
-        headers = []
+        headers = [("Content-Length", "0")]
         content = []
     else:
         headers = [("Content-Type", content_type),
