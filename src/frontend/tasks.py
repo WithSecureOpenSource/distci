@@ -5,12 +5,13 @@ import uuid
 import json
 import shutil
 
-from . import validators, response, request
+from . import validators, response, request, distlocks
 
 ERROR_INVALID_TASK_ID  = 'Invalid task ID'
 ERROR_TASK_NOT_FOUND   = 'Task not found'
 ERROR_INVALID_PAYLOAD  = 'Decoding task data failed'
 ERROR_TASK_WRONG_ACTOR = 'Task ownership mismatch'
+ERROR_TASK_LOCKED      = 'Task locked'
 
 def _data_dir(environ):
     """ Return tasks directory """
@@ -81,10 +82,34 @@ def update_task(environ, start_response, task_id):
     if not os.path.isdir(_task_dir(environ, task_id)):
         return response.send_error(start_response, 404, ERROR_TASK_NOT_FOUND)
     try:
-        task_description = json.loads(request.read_request_data(environ))
+        new_task_description = json.loads(request.read_request_data(environ))
     except ValueError:
         return response.send_error(start_response, 400, ERROR_INVALID_PAYLOAD)
-    _save_task_config(environ, task_id, task_description)
+    if not new_task_description.has_key('assignee'):
+        return response.send_error(start_response, 400, ERROR_INVALID_PAYLOAD)
+    if len(environ['config'].get('zookeeper_nodes', [])):
+        lock = distlocks.ZooKeeperLock(environ['config'].get('zookeeper_nodes'), 'task-lock-%s' % task_id)
+        if lock.try_lock() != True:
+            lock.close()
+            return response.send_response(start_response, 409, ERROR_TASK_LOCKED)
+    else:
+        lock = None
+    try:
+        old_task_description = _load_task_config(environ, task_id)
+    except:
+        if lock:
+            lock.unlock()
+            lock.close()
+        return response.send_response(start_response, 500)
+    if old_task_description.has_key('assignee') and old_task_description['assignee'] != new_task_description['assignee']:
+        if lock:
+            lock.unlock()
+            lock.close()
+        return response.send_response(start_response, 409, ERROR_TASK_WRONG_ACTOR)
+    _save_task_config(environ, task_id, new_task_description)
+    if lock:
+        lock.unlock()
+        lock.close()
     return response.send_response(start_response, 200, json.dumps(_prepare_task_data(environ, task_id)))
 
 def handle_request(environ, start_response, method, parts):
