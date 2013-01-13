@@ -4,8 +4,9 @@ upstream distci_frontend {
 
 server {
         location /distci/ {
-                fastcgi_pass    distci_frontend;
                 include         fastcgi_params;
-                fastcgi_param   SCRIPT_NAME     "/distci";
+                fastcgi_split_path_info ^(/distci)(/.*)$;
+                fastcgi_param   PATH_INFO       $fastcgi_path_info;
+                fastcgi_pass    distci_frontend;
         }
 }
