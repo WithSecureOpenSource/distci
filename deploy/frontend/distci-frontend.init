@@ -1,0 +1,64 @@
+#! /bin/sh
+
+### BEGIN INIT INFO
+# Provides:          distci-frontend
+# Required-Start:    $local_fs $remote_fs $network $syslog
+# Required-Stop:     $local_fs $remote_fs $network $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: starts DistCI frontend service
+# Description:       starts DistCI frontend service using start-stop-daemon
+### END INIT INFO
+
+SERVER=/usr/local/bin/distci-frontend
+NAME=distci-frontend
+DESC="DistCI frontend service"
+PIDFILE=/var/run/distci-frontend.pid
+PARAMS="-c /etc/distci/frontend.conf"
+
+test -x $SERVER || exit 0
+
+set -e
+
+. /lib/lsb/init-functions
+
+start_server() {
+    start-stop-daemon --start --quiet --pidfile $PIDFILE \
+        --make-pidfile --background \
+        --exec $SERVER -- $PARAMS || true
+}
+
+stop_server() {
+    start-stop-daemon --stop --quiet --pidfile $PIDFILE \
+        && rm -f $PIDFILE || true
+}
+
+case "$1" in
+  start)
+    echo -n "Starting $DESC: "
+    start_server
+    echo "$NAME."
+    ;;
+  stop)
+    echo -n "Stopping $DESC: "
+    stop_server
+    echo "$NAME."
+    ;;
+  restart|force-reload)
+    echo -n "Restarting $DESC: "
+    stop_server
+    sleep 1
+    start_server
+    echo "$NAME."
+    ;;
+  status)
+    status_of_proc -p $PIDFILE "$SERVER" $NAME || true
+    ;;
+  *)
+    echo "Usage: $NAME {start|stop|restart|force-reload|status}" >&2
+    exit 1
+    ;;
+esac
+
+exit 0
+

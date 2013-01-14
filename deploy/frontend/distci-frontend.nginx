@@ -1,0 +1,12 @@
+upstream distci_frontend {
+        server unix:/var/run/distci-frontend.socket;
+}
+
+server {
+        location /distci/ {
+                include         fastcgi_params;
+                fastcgi_split_path_info ^(/distci)(/.*)$;
+                fastcgi_param   PATH_INFO       $fastcgi_path_info;
+                fastcgi_pass    distci_frontend;
+        }
+}
