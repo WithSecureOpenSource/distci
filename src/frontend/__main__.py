@@ -26,7 +26,13 @@ def main(args_in):
         parser.print_help()
         return -1
 
-    frontend_app = frontend.Frontend(opts.config_file)
+    try:
+        config = json.load(file(opts.config_file, 'rb'))
+    except:
+        print "failed to parse configuration file"
+        return -1
+
+    frontend_app = frontend.Frontend(config)
 
     try:
         WSGIServer(frontend_app.handle_request,

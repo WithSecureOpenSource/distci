@@ -18,19 +18,16 @@ class TestTasks:
         cls.data_directory = '/Users/noushe/CI-proto'
         cls.data_directory = tempfile.mkdtemp()
         os.mkdir(os.path.join(cls.data_directory, 'tasks'))
-        fh, cls.config_file = tempfile.mkstemp()
-        config_data = json.dumps({ "data_directory": cls.data_directory })
-        os.write(fh, config_data) 
-        os.close(fh)
 
-        frontend_app = frontend.Frontend(cls.config_file)
+        config = { "data_directory": cls.data_directory }
+
+        frontend_app = frontend.Frontend(config)
         cls.app = TestApp(frontend_app.handle_request)
 
     @classmethod
     def tearDownClass(cls):
         cls.app = None
         shutil.rmtree(cls.data_directory)
-        os.unlink(cls.config_file)
 
     def test_01_list_tasks_empty(self):
         response = self.app.request('/tasks')
