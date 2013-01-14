@@ -4,6 +4,7 @@
 import sys
 import os
 import optparse
+import logging
 from flup.server.fcgi import WSGIServer
 
 from . import frontend
@@ -31,6 +32,10 @@ def main(args_in):
     except:
         print "failed to parse configuration file"
         return -1
+
+    if config.get('log_file'):
+        log_level = logging._levelNames.get(config.get('log_level', 'info').upper())
+        logging.basicConfig(level=log_level, format='%(asctime)s\t%(threadName)s\t%(name)s\t%(levelname)s\t%(message)s', filename=config.get('log_file'))
 
     frontend_app = frontend.Frontend(config)
 

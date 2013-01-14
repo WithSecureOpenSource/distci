@@ -4,6 +4,7 @@ import os
 import uuid
 import json
 import shutil
+import logging
 
 from . import validators, response, request, distlocks
 
@@ -13,124 +14,133 @@ ERROR_INVALID_PAYLOAD  = 'Decoding task data failed'
 ERROR_TASK_WRONG_ACTOR = 'Task ownership mismatch'
 ERROR_TASK_LOCKED      = 'Task locked'
 
-def _data_dir(environ):
-    """ Return tasks directory """
-    return os.path.join(environ['config'].get('data_directory'), 'tasks')
+class Tasks(object):
+    def __init__(self, config):
+        self.config = config
+        self.log = logging.getLogger('tasks')
+        self.zknodes = config.get('zookeeper_nodes', [])
+        if len(self.zknodes) == 0:
+            self.zknodes = None
 
-def _task_dir(environ, task_id):
-    """ Return directory for specific task """
-    return os.path.join(_data_dir(environ), task_id)
+    def _data_dir(self):
+        """ Return tasks directory """
+        return os.path.join(self.config.get('data_directory'), 'tasks')
 
-def _task_config_file(environ, task_id):
-    """ Return filename for task configuration """
-    return os.path.join(_task_dir(environ, task_id), 'task.description')
+    def _task_dir(self, task_id):
+        """ Return directory for specific task """
+        return os.path.join(self._data_dir(), task_id)
 
-def _load_task_config(environ, task_id):
-    """ Load and parse task configuration file """
-    return json.loads(file(_task_config_file(environ, task_id), 'rb').read())
+    def _task_config_file(self, task_id):
+        """ Return filename for task configuration """
+        return os.path.join(self._task_dir(task_id), 'task.description')
 
-def _save_task_config(environ, task_id, task_config):
-    """ Serialize and store task configuration """
-    file(_task_config_file(environ, task_id), 'wb').write(json.dumps(task_config))
+    def _load_task_config(self, task_id):
+        """ Load and parse task configuration file """
+        return json.loads(file(self._task_config_file(task_id), 'rb').read())
 
-def _prepare_task_data(environ, task_id):
-    """ Format task configuration for HTTP replies """
-    return {'id': task_id, 'data': _load_task_config(environ, task_id)}
+    def _save_task_config(self, task_id, task_config):
+        """ Serialize and store task configuration """
+        file(self._task_config_file(task_id), 'wb').write(json.dumps(task_config))
 
-def get_tasks(environ, start_response):
-    """ Return information on all open tasks """
-    result = { 'tasks': [] }
-    task_ids = os.listdir(_data_dir(environ))
-    for task_id in task_ids:
-        if not os.path.isdir(_task_dir(environ, task_id)):
-            continue
-        result['tasks'].append(_prepare_task_data(environ, task_id))
-    return response.send_response(start_response, 200, json.dumps(result))
+    def _prepare_task_data(self, task_id):
+        """ Format task configuration for HTTP replies """
+        return {'id': task_id, 'data': self._load_task_config(task_id)}
 
-def create_new_task(environ, start_response):
-    """ Post a new task """
-    task_id_candidate = str(uuid.uuid4())
-    try:
-        task_description = json.loads(request.read_request_data(environ))
-    except ValueError:
-        return response.send_error(start_response, 400, ERROR_INVALID_PAYLOAD)
-    os.mkdir(_task_dir(environ, task_id_candidate))
-    _save_task_config(environ, task_id_candidate, task_description)
-    return response.send_response(start_response, 201, json.dumps(_prepare_task_data(environ, task_id_candidate)))
+    def get_tasks(self, start_response):
+        """ Return information on all open tasks """
+        result = { 'tasks': [] }
+        task_ids = os.listdir(self._data_dir())
+        for task_id in task_ids:
+            if not os.path.isdir(self._task_dir(task_id)):
+                continue
+            result['tasks'].append(self._prepare_task_data(task_id))
+        return response.send_response(start_response, 200, json.dumps(result))
 
-def delete_task(environ, start_response, task_id):
-    """ Delete given task """
-    if validators.validate_task_id(task_id) != task_id:
-        return response.send_error(start_response, 400, ERROR_INVALID_TASK_ID)
-    if not os.path.isdir(_task_dir(environ, task_id)):
-        return response.send_error(start_response, 404, ERROR_TASK_NOT_FOUND)
-    shutil.rmtree(_task_dir(environ, task_id))
-    return response.send_response(start_response, 204)
+    def create_new_task(self, environ, start_response):
+        """ Post a new task """
+        try:
+            task_description = json.loads(request.read_request_data(environ))
+        except ValueError:
+            return response.send_error(start_response, 400, ERROR_INVALID_PAYLOAD)
 
-def get_task(environ, start_response, task_id):
-    """ Return information on a specific task """
-    if validators.validate_task_id(task_id) != task_id:
-        return response.send_error(start_response, 400, ERROR_INVALID_TASK_ID)
-    if not os.path.isdir(_task_dir(environ, task_id)):
-        return response.send_error(start_response, 404, ERROR_TASK_NOT_FOUND)
-    return response.send_response(start_response, 200, json.dumps(_prepare_task_data(environ, task_id)))
+        task_id_candidate = str(uuid.uuid4())
+        os.mkdir(self._task_dir(task_id_candidate))
+        self._save_task_config(task_id_candidate, task_description)
+        return response.send_response(start_response, 201, json.dumps(self._prepare_task_data(task_id_candidate)))
 
-def update_task(environ, start_response, task_id):
-    """ Update data configuration for an existing task """
-    if validators.validate_task_id(task_id) != task_id:
-        return response.send_error(start_response, 400, ERROR_INVALID_TASK_ID)
-    if not os.path.isdir(_task_dir(environ, task_id)):
-        return response.send_error(start_response, 404, ERROR_TASK_NOT_FOUND)
-    try:
-        new_task_description = json.loads(request.read_request_data(environ))
-    except ValueError:
-        return response.send_error(start_response, 400, ERROR_INVALID_PAYLOAD)
-    if not new_task_description.has_key('assignee'):
-        return response.send_error(start_response, 400, ERROR_INVALID_PAYLOAD)
-    if len(environ['config'].get('zookeeper_nodes', [])):
-        lock = distlocks.ZooKeeperLock(environ['config'].get('zookeeper_nodes'), 'task-lock-%s' % task_id)
-        if lock.try_lock() != True:
-            lock.close()
-            return response.send_response(start_response, 409, ERROR_TASK_LOCKED)
-    else:
-        lock = None
-    try:
-        old_task_description = _load_task_config(environ, task_id)
-    except:
+    def delete_task(self, start_response, task_id):
+        """ Delete given task """
+        if validators.validate_task_id(task_id) != task_id:
+            return response.send_error(start_response, 400, ERROR_INVALID_TASK_ID)
+        if not os.path.isdir(self._task_dir(task_id)):
+            return response.send_error(start_response, 404, ERROR_TASK_NOT_FOUND)
+        shutil.rmtree(self._task_dir(task_id))
+        return response.send_response(start_response, 204)
+
+    def get_task(self, start_response, task_id):
+        """ Return information on a specific task """
+        if validators.validate_task_id(task_id) != task_id:
+            return response.send_error(start_response, 400, ERROR_INVALID_TASK_ID)
+        if not os.path.isdir(self._task_dir(task_id)):
+            return response.send_error(start_response, 404, ERROR_TASK_NOT_FOUND)
+        return response.send_response(start_response, 200, json.dumps(self._prepare_task_data(task_id)))
+
+    def update_task(self, environ, start_response, task_id):
+        """ Update data configuration for an existing task """
+        if validators.validate_task_id(task_id) != task_id:
+            return response.send_error(start_response, 400, ERROR_INVALID_TASK_ID)
+        if not os.path.isdir(self._task_dir(task_id)):
+            return response.send_error(start_response, 404, ERROR_TASK_NOT_FOUND)
+        try:
+            new_task_description = json.loads(request.read_request_data(environ))
+        except ValueError:
+            return response.send_error(start_response, 400, ERROR_INVALID_PAYLOAD)
+        if not new_task_description.has_key('assignee'):
+            return response.send_error(start_response, 400, ERROR_INVALID_PAYLOAD)
+        if self.zknodes:
+            lock = distlocks.ZooKeeperLock(self.zknodes, 'task-lock-%s' % task_id)
+            if lock.try_lock() != True:
+                lock.close()
+                return response.send_response(start_response, 409, ERROR_TASK_LOCKED)
+        else:
+            lock = None
+        try:
+            old_task_description = self._load_task_config(task_id)
+        except:
+            if lock:
+                lock.unlock()
+                lock.close()
+            return response.send_response(start_response, 500)
+        if old_task_description.has_key('assignee') and old_task_description['assignee'] != new_task_description['assignee']:
+            if lock:
+                lock.unlock()
+                lock.close()
+            return response.send_response(start_response, 409, ERROR_TASK_WRONG_ACTOR)
+        self._save_task_config(task_id, new_task_description)
         if lock:
             lock.unlock()
             lock.close()
-        return response.send_response(start_response, 500)
-    if old_task_description.has_key('assignee') and old_task_description['assignee'] != new_task_description['assignee']:
-        if lock:
-            lock.unlock()
-            lock.close()
-        return response.send_response(start_response, 409, ERROR_TASK_WRONG_ACTOR)
-    _save_task_config(environ, task_id, new_task_description)
-    if lock:
-        lock.unlock()
-        lock.close()
-    return response.send_response(start_response, 200, json.dumps(_prepare_task_data(environ, task_id)))
+        return response.send_response(start_response, 200, json.dumps(self._prepare_task_data(task_id)))
 
-def handle_request(environ, start_response, method, parts):
-    """ Parse and dispatch task API requests """
-    if len(parts) == 0:
-        if method == 'GET':
-            retval = get_tasks(environ, start_response)
-        elif method == 'POST':
-            retval = create_new_task(environ, start_response)
+    def handle_request(self, environ, start_response, method, parts):
+        """ Parse and dispatch task API requests """
+        if len(parts) == 0:
+            if method == 'GET':
+                retval = self.get_tasks(start_response)
+            elif method == 'POST':
+                retval = self.create_new_task(environ, start_response)
+            else:
+                retval = response.send_error(start_response, 400)
+        elif len(parts) == 1:
+            if method == 'GET':
+                retval = self.get_task(start_response, parts[0])
+            elif method == 'PUT':
+                retval = self.update_task(environ, start_response, parts[0])
+            elif method == 'DELETE':
+                retval = self.delete_task(start_response, parts[0])
+            else:
+                retval = response.send_error(start_response, 400)
         else:
             retval = response.send_error(start_response, 400)
-    elif len(parts) == 1:
-        if method == 'GET':
-            retval = get_task(environ, start_response, parts[0])
-        elif method == 'PUT':
-            retval = update_task(environ, start_response, parts[0])
-        elif method == 'DELETE':
-            retval = delete_task(environ, start_response, parts[0])
-        else:
-            retval = response.send_error(start_response, 400)
-    else:
-        retval = response.send_error(start_response, 400)
-    return retval
+        return retval
 
