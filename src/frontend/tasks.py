@@ -61,6 +61,7 @@ class Tasks(object):
         try:
             task_description = json.loads(request.read_request_data(environ))
         except ValueError:
+            self.log.debug('Failed to load task data')
             return response.send_error(start_response, 400, ERROR_INVALID_PAYLOAD)
 
         task_id_candidate = str(uuid.uuid4())
@@ -88,19 +89,21 @@ class Tasks(object):
     def update_task(self, environ, start_response, task_id):
         """ Update data configuration for an existing task """
         if validators.validate_task_id(task_id) != task_id:
+            self.log.error("Failed to pass validation: '%s'" % task_id)
             return response.send_error(start_response, 400, ERROR_INVALID_TASK_ID)
         if not os.path.isdir(self._task_dir(task_id)):
+            self.log.debug("Task not found '%s'" % task_id)
             return response.send_error(start_response, 404, ERROR_TASK_NOT_FOUND)
         try:
             new_task_description = json.loads(request.read_request_data(environ))
         except ValueError:
-            return response.send_error(start_response, 400, ERROR_INVALID_PAYLOAD)
-        if not new_task_description.has_key('assignee'):
+            self.log.error("Decoding task data failed '%s'" % task_id)
             return response.send_error(start_response, 400, ERROR_INVALID_PAYLOAD)
         if self.zknodes:
             lock = distlocks.ZooKeeperLock(self.zknodes, 'task-lock-%s' % task_id)
             if lock.try_lock() != True:
                 lock.close()
+                self.log.debug("Task locked '%s'" % task_id)
                 return response.send_response(start_response, 409, ERROR_TASK_LOCKED)
         else:
             lock = None
@@ -110,11 +113,13 @@ class Tasks(object):
             if lock:
                 lock.unlock()
                 lock.close()
+            self.log.error("Failed to read task data '%s'" % task_id)
             return response.send_response(start_response, 500)
-        if old_task_description.has_key('assignee') and old_task_description['assignee'] != new_task_description['assignee']:
+        if old_task_description.has_key('assignee') and new_task_description.has_key('assignee') and old_task_description['assignee'] != new_task_description['assignee']:
             if lock:
                 lock.unlock()
                 lock.close()
+            self.log.debug("Task assignment conflict '%s'" % task_id)
             return response.send_response(start_response, 409, ERROR_TASK_WRONG_ACTOR)
         self._save_task_config(task_id, new_task_description)
         if lock:
@@ -124,6 +129,7 @@ class Tasks(object):
 
     def handle_request(self, environ, start_response, method, parts):
         """ Parse and dispatch task API requests """
+        self.log.debug('%s %r' % (method, parts))
         if len(parts) == 0:
             if method == 'GET':
                 retval = self.get_tasks(start_response)

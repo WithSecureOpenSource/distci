@@ -55,17 +55,7 @@ class TestTasks:
         assert result['id'] == task_id, "ID mismatch"
         assert result['data']['command'] == 'something', "Wrong data"
 
-    def test_04_update_without_assignee(self):
-        task_id = self.test_state.get('id')
-        if task_id is None:        
-            raise SkipTest("Skipping test for single task update, no recorded state")
-        new_task_data = json.dumps({'command': 'something_else' })
-        request = TestRequest.blank('/tasks/%s' % task_id, content_type='application/json')
-        request.method = 'PUT'
-        request.body = new_task_data
-        response = self.app.do_request(request, 400, False)
-
-    def test_05_update(self):
+    def test_04_update(self):
         task_id = self.test_state.get('id')
         if task_id is None:        
             raise SkipTest("Skipping test for single task update, no recorded state")
@@ -80,7 +70,7 @@ class TestTasks:
         assert result['data']['command'] == 'something_else', "Wrong command"
         assert result['data']['assignee'] == 'my-id', "Wrong assignee"
 
-    def test_06_update_with_wrong_assignee(self):
+    def test_05_update_with_wrong_assignee(self):
         task_id = self.test_state.get('id')
         if task_id is None:        
             raise SkipTest("Skipping test for single task update, no recorded state")
@@ -90,13 +80,13 @@ class TestTasks:
         request.body = new_task_data
         response = self.app.do_request(request, 409, False)
 
-    def test_07_list_tasks(self):
+    def test_06_list_tasks(self):
         response = self.app.request('/tasks')
         result = json.loads(response.body)
         assert result.has_key('tasks'), "Tasks entry went missing"
         assert len(result['tasks']) == 1, "Invalid task count"
 
-    def test_08_delete(self):
+    def test_07_delete(self):
         task_id = self.test_state.get('id')
         if task_id is None:        
             raise SkipTest("Skipping test for single task status, no recorded state")
