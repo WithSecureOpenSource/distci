@@ -1,5 +1,17 @@
 #!/bin/sh
 
+if [ -z "$PONI_ROOT" ]
+then
+    echo PONI_ROOT environmental variable is not set
+    exit 127
+fi
+
+if [ -z "$DISTCI_EGGS" ]
+then
+    echo DISTCI_EGGS environmental variable is not set
+    exit 127
+fi
+
 echo "Initializing poni repository..."
 poni init
 
