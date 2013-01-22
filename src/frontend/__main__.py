@@ -5,6 +5,7 @@ import sys
 import os
 import optparse
 import logging
+import json
 from flup.server.fcgi import WSGIServer
 
 from . import frontend
@@ -14,13 +15,13 @@ __usage__   = "%prog -c <configuration file> [-s <socket filename>]"
 __version__ = "1.0"
 __author__  = "Heikki Nousiainen"
 
-def main(args_in):
+def main(argv):
     """ Main function """
     parser = optparse.OptionParser(description=__doc__, version=__version__)
     parser.set_usage(__usage__)
     parser.add_option("-c", dest="config_file", help="configuration filename")
     parser.add_option("-s", dest="socket_file", help="listening socket filename", default="/var/run/distci-frontend.socket")
-    opts, _ = parser.parse_args(args_in)
+    opts, _ = parser.parse_args(argv)
 
     if not opts.config_file:
         print "configuration file not specified"
@@ -49,8 +50,8 @@ def main(args_in):
     return 0
 
 def main_entry():
-    return main(sys.argv[1:])
+    return main(sys.argv)
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(main(sys.argv))
 
