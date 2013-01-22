@@ -22,4 +22,5 @@ poni control zookeeper-setup install
 
 poni control frontend-setup install
 
+poni control calculator-worker-setup install
 
