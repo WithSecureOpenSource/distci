@@ -7,7 +7,7 @@ class PlugIn(config.PlugIn):
         self.add_file("distci-frontend.init", dest_path="/root/deploy/frontend/", render=self.render_text)
         self.add_file("distci-frontend.conf", dest_path="/root/deploy/frontend/")
         self.add_file("distci-frontend.nginx", dest_path="/root/deploy/frontend/", render=self.render_text)
-        self.add_dir(os.environ["DISTCI_EGGS"], dest_path="/root/deploy/frontend/eggs/")
+        self.add_dir(self.node['distci_eggs'], dest_path="/root/deploy/frontend/eggs/")
 
     @config.control()
     def install(self, arg):

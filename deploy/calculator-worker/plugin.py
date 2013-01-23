@@ -6,7 +6,7 @@ class PlugIn(config.PlugIn):
         self.add_file("calculator-worker-install.sh", dest_path="/root/deploy/worker/")
         self.add_file("distci-calculator-worker.init", dest_path="/root/deploy/worker/", render=self.render_text)
         self.add_file("distci-calculator-worker.conf", dest_path="/root/deploy/worker/")
-        self.add_dir(os.environ["DISTCI_EGGS"], dest_path="/root/deploy/worker/eggs/")
+        self.add_dir(self.node['distci_eggs'], dest_path="/root/deploy/worker/eggs/")
 
     @config.control()
     def install(self, arg):
