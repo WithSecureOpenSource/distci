@@ -10,6 +10,17 @@ then
     /etc/init.d/nginx stop
 fi
 
+mkdir -p /mnt/data
+
+#set $monitors = [ $n.private.dns for $n in $find("ceph-storage/cnode") ]
+if ! grep -q ceph /etc/fstab
+then
+  echo #echo ','.join($monitors) #:/ /mnt/data ceph defaults >> /etc/fstab
+  mount -av
+fi
+
+mkdir -p /mnt/data/distci/tasks
+
 apt-get -y install python-setuptools python-flup nginx python-zookeeper
 easy_install /root/deploy/frontend/eggs/distci-*.egg
 
@@ -23,8 +34,6 @@ mkdir -p /etc/distci
 cp /root/deploy/frontend/distci-frontend.conf /etc/distci/frontend.conf
 
 /etc/init.d/nginx start
-
-mkdir -p /var/lib/distci/frontend/tasks
 
 cp /root/deploy/frontend/distci-frontend.init /etc/init.d/distci-frontend
 chmod u+x /etc/init.d/distci-frontend

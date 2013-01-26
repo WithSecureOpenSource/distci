@@ -14,11 +14,17 @@ fi
 
 poni cloud init distci --wait 
 
+poni cloud update distci
+
 poni deploy distci
 
 poni control nodes-prepare setup
 
 poni control zookeeper-setup install
+
+poni control ceph-storage-setup install-stage1
+poni control ceph-storage-setup install-stage2
+poni control ceph-storage-setup install-stage3
 
 poni control frontend-setup install
 
