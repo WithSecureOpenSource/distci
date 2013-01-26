@@ -5,6 +5,7 @@ import uuid
 import json
 import shutil
 import logging
+import time
 
 from . import validators, response, request, distlocks
 
@@ -53,7 +54,15 @@ class Tasks(object):
         for task_id in task_ids:
             if not os.path.isdir(self._task_dir(task_id)):
                 continue
-            result['tasks'].append(self._prepare_task_data(task_id))
+            task_data = None
+            for _ in range(10):
+                try:
+                    task_data = self._prepare_task_data(task_id)
+                    break
+                except:
+                    time.sleep(0.1)
+            if task_data:
+                result['tasks'].append(task_data)
         return response.send_response(start_response, 200, json.dumps(result))
 
     def create_new_task(self, environ, start_response):
@@ -67,7 +76,7 @@ class Tasks(object):
         task_id_candidate = str(uuid.uuid4())
         os.mkdir(self._task_dir(task_id_candidate))
         self._save_task_config(task_id_candidate, task_description)
-        return response.send_response(start_response, 201, json.dumps(self._prepare_task_data(task_id_candidate)))
+        return response.send_response(start_response, 201, json.dumps({'id': task_id_candidate, 'data': task_description}))
 
     def delete_task(self, start_response, task_id):
         """ Delete given task """
@@ -84,7 +93,16 @@ class Tasks(object):
             return response.send_error(start_response, 400, ERROR_INVALID_TASK_ID)
         if not os.path.isdir(self._task_dir(task_id)):
             return response.send_error(start_response, 404, ERROR_TASK_NOT_FOUND)
-        return response.send_response(start_response, 200, json.dumps(self._prepare_task_data(task_id)))
+        task_data = None
+        for _ in range(10):
+            try:
+                task_data = json.dumps(self._prepare_task_data(task_id))
+                break
+            except:
+                time.sleep(0.1)
+        if not task_data:
+            return response.send_error(start_response, 409, ERROR_TASK_LOCKED)
+        return response.send_response(start_response, 200, task_data)
 
     def update_task(self, environ, start_response, task_id):
         """ Update data configuration for an existing task """
@@ -125,7 +143,7 @@ class Tasks(object):
         if lock:
             lock.unlock()
             lock.close()
-        return response.send_response(start_response, 200, json.dumps(self._prepare_task_data(task_id)))
+        return response.send_response(start_response, 200, json.dumps({'id': task_id, 'data': new_task_description}))
 
     def handle_request(self, environ, start_response, method, parts):
         """ Parse and dispatch task API requests """
