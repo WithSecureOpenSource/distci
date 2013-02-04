@@ -20,6 +20,7 @@ then
 fi
 
 mkdir -p /mnt/data/distci/tasks
+mkdir -p /mnt/data/distci/jobs
 
 apt-get -y install python-setuptools python-flup nginx python-zookeeper
 easy_install /root/deploy/frontend/eggs/distci-*.egg
