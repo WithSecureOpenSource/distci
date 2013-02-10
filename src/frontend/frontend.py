@@ -1,3 +1,10 @@
+"""
+Main request entry point for DistCI frontend
+
+Copyright (c) 2012-2013 Heikki Nousiainen, F-Secure
+See LICENSE for details
+"""
+
 import json
 
 from . import dispatcher

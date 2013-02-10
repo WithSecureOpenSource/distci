@@ -1,3 +1,10 @@
+"""
+Test DistCI input validation routines
+
+Copyright (c) 2012-2013 Heikki Nousiainen, F-Secure
+See LICENSE for details
+"""
+
 from frontend import validators
 
 class TestTasks:

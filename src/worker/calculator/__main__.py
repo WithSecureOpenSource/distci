@@ -1,3 +1,10 @@
+"""
+Entrypoint for calculator worker
+
+Copyright (c) 2012-2013 Heikki Nousiainen, F-Secure
+See LICENSE for details
+"""
+
 import json
 import optparse
 import os

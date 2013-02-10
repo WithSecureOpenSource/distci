@@ -1,4 +1,9 @@
-""" Handle job related requests """
+"""
+Handle job related requests
+
+Copyright (c) 2012-2013 Heikki Nousiainen, F-Secure
+See LICENSE for details
+"""
 
 import os
 import json

@@ -1,3 +1,10 @@
+"""
+Tests for DistCI task management interfaces
+
+Copyright (c) 2012-2013 Heikki Nousiainen, F-Secure
+See LICENSE for details
+"""
+
 from nose.plugins.skip import SkipTest
 from webtest import TestApp, TestRequest
 import json

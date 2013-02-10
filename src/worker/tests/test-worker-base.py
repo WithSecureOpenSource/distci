@@ -1,4 +1,10 @@
-#from nose.plugins.skip import SkipTest
+"""
+Tests for basic worker tasks
+
+Copyright (c) 2012-2013 Heikki Nousiainen, F-Secure
+See LICENSE for details
+"""
+
 import tempfile
 import os
 import shutil

@@ -1,5 +1,10 @@
 #!/usr/bin/env python
-""" Module entrypoint for distci-frontend """
+"""
+Module entrypoint for distci-frontend
+
+Copyright (c) 2012-2013 Heikki Nousiainen, F-Secure
+See LICENSE for details
+"""
 
 import sys
 import os

@@ -1,4 +1,9 @@
-""" Top-level request dispatcher """
+"""
+Top-level request dispatcher
+
+Copyright (c) 2012-2013 Heikki Nousiainen, F-Secure
+See LICENSE for details
+"""
 
 from . import response, jobs, tasks
 import logging

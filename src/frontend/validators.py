@@ -1,4 +1,9 @@
-""" Helpers for validating various inputs"""
+"""
+Helpers for validating various inputs
+
+Copyright (c) 2012-2013 Heikki Nousiainen, F-Secure
+See LICENSE for details
+"""
 
 import re
 

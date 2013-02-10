@@ -1,3 +1,10 @@
+"""
+Handler for job tagging management
+
+Copyright (c) 2012-2013 Heikki Nousiainen, F-Secure
+See LICENSE for details
+"""
+
 import logging
 
 from . import response

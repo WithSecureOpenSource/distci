@@ -1,3 +1,10 @@
+"""
+Example worker: calculator based on 'bc'
+
+Copyright (c) 2012-2013 Heikki Nousiainen, F-Secure
+See LICENSE for details
+"""
+
 import subprocess
 
 from distci.worker import worker_base
@@ -29,4 +36,4 @@ class CalculatorWorker(worker_base.WorkerBase):
                 task.config['result'] = sout.strip()
                 del task.config['assignee']
                 self.update_task(task)
- 
+

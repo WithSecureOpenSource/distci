@@ -1,3 +1,10 @@
+"""
+Distributed lock management
+
+Copyright (c) 2012-2013 Heikki Nousiainen, F-Secure
+See LICENSE for details
+"""
+
 try:
     import zookeeper
 except:
