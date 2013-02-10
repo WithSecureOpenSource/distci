@@ -12,6 +12,11 @@ then
     exit 127
 fi
 
+echo "Creating CEPH deployment keys"
+if [ -f ceph-storage/ceph-setup-key ]; then rm ceph-storage/ceph-setup-key; fi
+if [ -f ceph-storage/ceph-setup-key.pub ]; then rm ceph-storage/ceph-setup-key.pub; fi
+ssh-keygen -f ceph-storage/ceph-setup-key -N ""
+
 echo "Initializing poni repository..."
 poni init
 
