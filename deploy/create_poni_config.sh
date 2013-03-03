@@ -95,5 +95,5 @@ poni add-config distci/ceph-storage/ ceph-storage-setup
 poni update-config ceph-storage-setup ceph-storage/plugin.py ceph-storage/ceph-storage-install-stage1.sh ceph-storage/ceph-storage-install-stage2.sh ceph-storage/ceph-storage-install-stage3.sh ceph-storage/ceph.conf ceph-storage/apt-ceph-sources ceph-storage/ceph-repo-key.asc ceph-storage/ceph-setup-key ceph-storage/ceph-setup-key.pub
 
 echo "Configuring cloud properties"
-poni set distci cloud.provider=eucalyptus cloud.image=emi-B33133CB cloud.type=m1.small cloud.key_pair=noushe-euca user=root
+poni set distci cloud.provider=eucalyptus cloud.image=emi-C2AA3DDB cloud.type=m1.small cloud.key_pair=noushe-euca user=root
 

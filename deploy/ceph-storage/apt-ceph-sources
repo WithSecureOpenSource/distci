@@ -1,2 +1,2 @@
-deb http://gtn-debian-mirror.gtn:3142/ceph.com/debian/ wheezy main
+deb http://ceph.com/debian/ wheezy main
 

@@ -23,7 +23,7 @@ Setting up
 2. Modify create_poni_config.sh to your taste:
     - How many frontend nodes you want to deploy?
     - How many zookeeper nodes you want to deploy?
-    - Replace Ramdisk, Kernel and Image files to match your Eucalyptus setup.
+    - Replace Image file to match your Eucalyptus setup.
     - Replace ssh-key with your own copy.
 
 Running deployment
