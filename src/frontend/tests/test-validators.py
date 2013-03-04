@@ -7,7 +7,7 @@ See LICENSE for details
 
 from frontend import validators
 
-class TestTasks:
+class TestValidators:
     valid_task_ids = [
             '00000000-0000-0000-0000-000000000000',
             'be1a4893-aada-4fa1-980c-46fc30e196c6'
