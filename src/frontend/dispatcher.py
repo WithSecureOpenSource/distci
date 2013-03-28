@@ -29,10 +29,8 @@ class Dispatcher(object):
             self.log.error('Invalid PATH_INFO, (%r)', environ['PATH_INFO'])
             return response.send_error(start_response, 400)
 
-        self.log.debug('part[0] == %r', parts[0])
-
         if parts[0] == 'jobs':
-            return self.jobs.handle_request(environ, start_response, method, parts[1:]) 
+            return self.jobs.handle_request(environ, start_response, method, parts[1:])
         elif parts[0] == 'tasks':
             return self.tasks.handle_request(environ, start_response, method, parts[1:])
         elif parts[0] == '':
