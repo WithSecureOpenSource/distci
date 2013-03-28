@@ -18,3 +18,7 @@ ERROR_BUILD_CREATE_FAILED      = 'Failed to allocate a new build'
 ERROR_BUILD_WRITE_FAILED       = 'Write error'
 ERROR_BUILD_TASK_CREATION_FAILED = 'Failed to create build control task'
 
+ERROR_ARTIFACT_INVALID_ID      = 'Invalid artifact ID'
+ERROR_ARTIFACT_NOT_FOUND       = 'Artifact not found'
+ERROR_ARTIFACT_WRITE_FAILED    = 'Write error'
+
