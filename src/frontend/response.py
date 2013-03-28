@@ -34,6 +34,20 @@ def send_response(start_response, code, content=None, content_type="application/
     start_response('%d %s' % (code, status), headers)
     return content
 
+def send_response_file(environ, start_response, code, filehandle, content_len, content_type="application/octet-stream"):
+    """ Send file response """
+    status = _STATUS_CODES[code]
+
+    headers = [("Content-Type", content_type),
+               ("Content-Length", str(content_len))]
+
+    start_response('%d %s' % (code, status), headers)
+
+    if 'wsgi.file_wrapper' in environ:
+        return environ['wsgi.file_wrapper'](filehandle, 1024*128)
+    else:
+        return iter(lambda: filehandle.read(1024*128), '')
+
 def send_error(start_response, code, message=None):
     """ Build and send out error response """
     if message is not None:
@@ -41,3 +55,4 @@ def send_error(start_response, code, message=None):
     else:
         content = None
     return send_response(start_response, code, content)
+

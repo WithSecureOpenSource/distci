@@ -14,3 +14,11 @@ def read_request_data(environ):
     except (TypeError, AttributeError):
         return None
 
+def get_request_data_handle_and_length(environ):
+    """ Return request body handle and content-length as a tuple """
+    try:
+        content_len = int(environ.get('CONTENT_LENGTH'))
+        return environ.get('wsgi.input'), content_len
+    except (TypeError, AttributeError):
+        return None, None
+

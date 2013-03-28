@@ -12,13 +12,7 @@ import shutil
 import logging
 import time
 
-from . import validators, response, request, distlocks
-
-ERROR_INVALID_TASK_ID  = 'Invalid task ID'
-ERROR_TASK_NOT_FOUND   = 'Task not found'
-ERROR_INVALID_PAYLOAD  = 'Decoding task data failed'
-ERROR_TASK_WRONG_ACTOR = 'Task ownership mismatch'
-ERROR_TASK_LOCKED      = 'Task locked'
+from . import validators, response, request, distlocks, constants
 
 class Tasks(object):
     def __init__(self, config):
@@ -76,7 +70,7 @@ class Tasks(object):
             task_description = json.loads(request.read_request_data(environ))
         except ValueError:
             self.log.debug('Failed to load task data')
-            return response.send_error(start_response, 400, ERROR_INVALID_PAYLOAD)
+            return response.send_error(start_response, 400, constants.ERROR_TASK_INVALID_PAYLOAD)
 
         task_id_candidate = str(uuid.uuid4())
         os.mkdir(self._task_dir(task_id_candidate))
@@ -86,18 +80,18 @@ class Tasks(object):
     def delete_task(self, start_response, task_id):
         """ Delete given task """
         if validators.validate_task_id(task_id) != task_id:
-            return response.send_error(start_response, 400, ERROR_INVALID_TASK_ID)
+            return response.send_error(start_response, 400, constants.ERROR_TASK_INVALID_ID)
         if not os.path.isdir(self._task_dir(task_id)):
-            return response.send_error(start_response, 404, ERROR_TASK_NOT_FOUND)
+            return response.send_error(start_response, 404, constants.ERROR_TASK_NOT_FOUND)
         shutil.rmtree(self._task_dir(task_id))
         return response.send_response(start_response, 204)
 
     def get_task(self, start_response, task_id):
         """ Return information on a specific task """
         if validators.validate_task_id(task_id) != task_id:
-            return response.send_error(start_response, 400, ERROR_INVALID_TASK_ID)
+            return response.send_error(start_response, 400, constants.ERROR_TASK_INVALID_ID)
         if not os.path.isdir(self._task_dir(task_id)):
-            return response.send_error(start_response, 404, ERROR_TASK_NOT_FOUND)
+            return response.send_error(start_response, 404, constants.ERROR_TASK_NOT_FOUND)
         task_data = None
         for _ in range(10):
             try:
@@ -106,28 +100,28 @@ class Tasks(object):
             except:
                 time.sleep(0.1)
         if not task_data:
-            return response.send_error(start_response, 409, ERROR_TASK_LOCKED)
+            return response.send_error(start_response, 409, constants.ERROR_TASK_LOCKED)
         return response.send_response(start_response, 200, task_data)
 
     def update_task(self, environ, start_response, task_id):
         """ Update data configuration for an existing task """
         if validators.validate_task_id(task_id) != task_id:
             self.log.error("Failed to pass validation: '%s'" % task_id)
-            return response.send_error(start_response, 400, ERROR_INVALID_TASK_ID)
+            return response.send_error(start_response, 400, constants.ERROR_TASK_INVALID_ID)
         if not os.path.isdir(self._task_dir(task_id)):
             self.log.debug("Task not found '%s'" % task_id)
-            return response.send_error(start_response, 404, ERROR_TASK_NOT_FOUND)
+            return response.send_error(start_response, 404, constants.ERROR_TASK_NOT_FOUND)
         try:
             new_task_description = json.loads(request.read_request_data(environ))
         except ValueError:
             self.log.error("Decoding task data failed '%s'" % task_id)
-            return response.send_error(start_response, 400, ERROR_INVALID_PAYLOAD)
+            return response.send_error(start_response, 400, constants.ERROR_TASK_INVALID_PAYLOAD)
         if self.zknodes:
             lock = distlocks.ZooKeeperLock(self.zknodes, 'task-lock-%s' % task_id)
             if lock.try_lock() != True:
                 lock.close()
                 self.log.debug("Task locked '%s'" % task_id)
-                return response.send_response(start_response, 409, ERROR_TASK_LOCKED)
+                return response.send_response(start_response, 409, constants.ERROR_TASK_LOCKED)
         else:
             lock = None
         try:
@@ -143,7 +137,7 @@ class Tasks(object):
                 lock.unlock()
                 lock.close()
             self.log.debug("Task assignment conflict '%s'" % task_id)
-            return response.send_response(start_response, 409, ERROR_TASK_WRONG_ACTOR)
+            return response.send_response(start_response, 409, constants.ERROR_TASK_WRONG_ACTOR)
         self._save_task_config(task_id, new_task_description)
         if lock:
             lock.unlock()

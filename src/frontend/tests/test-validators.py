@@ -7,7 +7,7 @@ See LICENSE for details
 
 from frontend import validators
 
-class TestTasks:
+class TestValidators:
     valid_task_ids = [
             '00000000-0000-0000-0000-000000000000',
             'be1a4893-aada-4fa1-980c-46fc30e196c6'
@@ -41,6 +41,20 @@ class TestTasks:
             'my:job'
         ]
 
+    valid_build_ids = [
+            '1',
+            '1234567890123456'
+    ]
+
+    invalid_build_ids = [
+            '/etc/passwd',
+            '..',
+            '/',
+            'foobar',
+            '123foobar',
+            '12345678901234567'
+    ]
+
     def test_01_valid_task_ids(self):
         for task_id in self.valid_task_ids:
             assert validators.validate_task_id(task_id) == task_id, "Validator declined valid task_id %s" % task_id
@@ -55,5 +69,13 @@ class TestTasks:
 
     def test_04_invalid_job_ids(self):
         for job_id in self.invalid_job_ids:
-            assert validators.validate_job_id(job_id) is None, "Validator accepted invalid job_id %s" % task_id
+            assert validators.validate_job_id(job_id) is None, "Validator accepted invalid job_id %s" % job_id
+
+    def test_05_valid_build_ids(self):
+        for build_id in self.valid_build_ids:
+            assert validators.validate_build_id(build_id) == build_id, "Validator declined valid build_id %s" % build_id
+
+    def test_06_invalid_build_ids(self):
+        for build_id in self.invalid_build_ids:
+            assert validators.validate_build_id(build_id) is None, "Validator accepted invalid build_id %s" % build_id
 

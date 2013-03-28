@@ -117,7 +117,6 @@ class WorkerBase(object):
                         return task
                     else:
                         self.log.debug("Failed to claim the task '%s'" % entry['id'])
-                        
             if timeout is not None or time.time() >= start_timestamp + timeout:
                 time.sleep(self.worker_config.get('poll_interval', 10))
         return None
