@@ -38,6 +38,10 @@ class JobsBuilds(object):
         """ Return filename for a build state file """
         return os.path.join(self._build_dir(job_id, build_id), 'build.state')
 
+    def _build_workspace_file(self, job_id, build_id):
+        """ Return filename for workspace archive """
+        return os.path.join(self._build_dir(job_id, build_id), 'workspace')
+
     def _console_log_file(self, job_id, build_id):
         """ Return filename for a build console log """
         return os.path.join(self._build_dir(job_id, build_id), 'console.log')
@@ -195,6 +199,78 @@ class JobsBuilds(object):
             pass
         return response.send_response(start_response, 204)
 
+    def update_workspace(self, environ, start_response, job_id, build_id):
+        """ Store workspace archive """
+        if validators.validate_job_id(job_id) == None:
+            self.log.error("Job_id validation failure, '%s'", job_id)
+            return response.send_error(start_response, 400, constants.ERROR_JOB_INVALID_ID)
+        if validators.validate_build_id(build_id) != build_id:
+            self.log.error("Build_id validation failure, '%s'", build_id)
+            return response.send_error(start_response, 400, constants.ERROR_BUILD_INVALID_ID)
+        if not os.path.isdir(self._build_dir(job_id, build_id)):
+            return response.send_error(start_response, 404, constants.ERROR_BUILD_NOT_FOUND)
+
+        ifh, data_len = request.get_request_data_handle_and_length(environ)
+
+        try:
+            ofh = open(self._build_workspace_file(job_id, build_id), 'wb')
+        except IOError:
+            return response.send_error(start_response, 500, constants.ERROR_BUILD_WRITE_FAILED)
+
+        try:
+            while data_len > 0:
+                read_len = data_len
+                if read_len > 1024*128:
+                    read_len = 1024*128
+                data = ifh.read(read_len)
+                ofh.write(data)
+                data_len = data_len - len(data)
+        except IOError:
+            ofh.close()
+            return response.send_error(start_response, 500, constants.ERROR_BUILD_WRITE_FAILED)
+
+        ofh.close()
+
+        return response.send_response(start_response, 204)
+
+    def get_workspace(self, environ, start_response, job_id, build_id):
+        """ Get workspace archive """
+        if validators.validate_job_id(job_id) == None:
+            self.log.error("Job_id validation failure, '%s'", job_id)
+            return response.send_error(start_response, 400, constants.ERROR_JOB_INVALID_ID)
+        if validators.validate_build_id(build_id) != build_id:
+            self.log.error("Build_id validation failure, '%s'", build_id)
+            return response.send_error(start_response, 400, constants.ERROR_BUILD_INVALID_ID)
+        if not os.path.isfile(self._build_workspace_file(job_id, build_id)):
+            return response.send_error(start_response, 404, constants.ERROR_BUILD_NOT_FOUND)
+
+        try:
+            ifh = open(self._build_workspace_file(job_id, build_id))
+        except IOError:
+            return response.send_error(start_response, 500, constants.ERROR_BUILD_READ_FAILED)
+
+        file_len = os.path.getsize(self._build_workspace_file(job_id, build_id))
+
+        return response.send_response_file(environ, start_response, 200, ifh, file_len)
+
+    def delete_workspace(self, start_response, job_id, build_id):
+        """ Delete workspace archive """
+        if validators.validate_job_id(job_id) == None:
+            self.log.error("Job_id validation failure, '%s'", job_id)
+            return response.send_error(start_response, 400, constants.ERROR_JOB_INVALID_ID)
+        if validators.validate_build_id(build_id) != build_id:
+            self.log.error("Build_id validation failure, '%s'", build_id)
+            return response.send_error(start_response, 400, constants.ERROR_BUILD_INVALID_ID)
+        if not os.path.isfile(self._build_workspace_file(job_id, build_id)):
+            return response.send_error(start_response, 404, constants.ERROR_BUILD_NOT_FOUND)
+
+        try:
+            os.unlink(self._build_workspace_file(job_id, build_id))
+        except IOError:
+            return response.send_error(start_response, 500, constants.ERROR_BUILD_WRITE_FAILED)
+
+        return response.send_response(start_response, 204)
+
     def delete_build(self, start_response, job_id, build_id):
         """ Delete a specific build and all related data """
         if validators.validate_job_id(job_id) == None:
@@ -237,6 +313,12 @@ class JobsBuilds(object):
                 return self.get_console_log(start_response, job_id, parts[0])
             elif parts[1] == 'console' and method == 'POST':
                 return self.update_console_log(environ, start_response, job_id, parts[0])
+            elif parts[1] == 'workspace' and method == 'GET':
+                return self.get_workspace(environ, start_response, job_id, parts[0])
+            elif parts[1] == 'workspace' and method == 'PUT':
+                return self.update_workspace(environ, start_response, job_id, parts[0])
+            elif parts[1] == 'workspace' and method == 'DELETE':
+                return self.delete_workspace(start_response, job_id, parts[0])
             else:
                 return response.send_error(start_response, 400)
 
