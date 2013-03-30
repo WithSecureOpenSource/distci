@@ -55,9 +55,8 @@ class TestWorkerBase:
         worker_config = { 'capabilities': [ 'test' ],
                           'poll_interval': 1,
                           'retry_count': 10,
-                          'frontends': [ 'http://localhost:8800/' ] }
-        cls.worker = worker_base.WorkerBase()
-        cls.worker.worker_config = worker_config
+                          'task_frontends': [ 'http://localhost:8800/' ] }
+        cls.worker = worker_base.WorkerBase(worker_config)
 
     @classmethod
     def tearDownClass(cls):
@@ -72,9 +71,10 @@ class TestWorkerBase:
         assert task is None, "didn't expect task to be returned"
 
     def test_02_post_task(self):
-        new_task = task_base.GenericTask({'capabilities': ['test']})
-        task_id = self.worker.post_new_task(new_task)
-        assert task_id is not None, "failed to post new task"
+        new_task = task_base.GenericTask({'status': 'pending',
+                                          'capabilities': ['test']})
+        task_data = self.worker.post_new_task(new_task)
+        assert task_data is not None, "failed to post new task"
 
     def test_03_fetch_task(self):
         task = self.worker.fetch_task(1)
