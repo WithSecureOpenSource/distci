@@ -13,7 +13,7 @@ import logging
 import json
 from flup.server.fcgi import WSGIServer
 
-from . import frontend
+from distci.frontend import frontend
 
 __appname__ = "distci-frontend"
 __usage__   = "%prog -c <configuration file> [-s <socket filename>]"

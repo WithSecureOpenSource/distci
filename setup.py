@@ -9,7 +9,7 @@ setup(
                  'distci.distcilib',
                  'distci.worker',
                  'distci.worker.calculator' ],
-    package_dir = { 'distci': 'src' },
+    package_dir = { 'distci': 'src/distci' },
     entry_points = {
         'console_scripts': [
             'distci-frontend = distci.frontend.__main__:main_entry',

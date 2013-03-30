@@ -5,7 +5,7 @@ Copyright (c) 2012-2013 Heikki Nousiainen, F-Secure
 See LICENSE for details
 """
 
-from . import response, jobs, tasks
+from distci.frontend import response, jobs, tasks
 import logging
 
 class Dispatcher(object):

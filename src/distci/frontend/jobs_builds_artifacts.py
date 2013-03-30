@@ -10,7 +10,7 @@ import uuid
 import os
 import json
 
-from . import validators, request, response, constants
+from distci.frontend import validators, request, response, constants
 
 class JobsBuildsArtifacts(object):
     def __init__(self, config):

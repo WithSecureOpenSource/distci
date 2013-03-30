@@ -12,7 +12,7 @@ import tempfile
 import os
 import shutil
 
-import frontend
+from distci.frontend import frontend
 
 class TestTasks:
     app = None
