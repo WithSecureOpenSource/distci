@@ -1,5 +1,5 @@
 127.0.0.1 localhost
-#for $ceph_node in $find("/*")
-$ceph_node.private.dns $ceph_node.cloud.vm_name
+#for $distci_node in $find("/*")
+$distci_node.private.ip $distci_node.cloud.vm_name
 #end for
 

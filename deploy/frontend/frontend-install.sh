@@ -12,7 +12,7 @@ fi
 
 mkdir -p /mnt/data
 
-#set $monitors = [ $n.private.dns for $n in $find("ceph-storage/cnode") ]
+#set $monitors = [ $n.private.ip for $n in $find("ceph-storage/cnode") ]
 if ! grep -q ceph /etc/fstab
 then
   echo #echo ','.join($monitors) #:/ /mnt/data ceph defaults >> /etc/fstab
