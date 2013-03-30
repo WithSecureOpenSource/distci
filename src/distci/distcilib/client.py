@@ -175,7 +175,7 @@ class Client(object):
     def update_task(self, task_id, task_description, retries=10):
         """ Update task contents """
         for _ in range(retries):
-            task_data = self.update_task(task_id, task_description)
+            task_data = self._update_task(task_id, task_description)
             if task_data is not None:
                 return task_data
         return None
