@@ -11,9 +11,9 @@ import logging
 import time
 import shutil
 
-from . import validators, request, response, jobs_builds_artifacts, distlocks, constants
+from distci.frontend import validators, request, response, jobs_builds_artifacts, distlocks, constants
 
-from distcilib import client
+from distci.distcilib import client
 
 class JobsBuilds(object):
     """ Class for handling build related requests """

@@ -7,7 +7,7 @@ See LICENSE for details
 
 import logging
 
-from . import response
+from distci.frontend import response
 
 class JobsTags(object):
     def __init__(self, config):

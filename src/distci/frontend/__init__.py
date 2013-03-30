@@ -5,7 +5,7 @@ Copyright (c) 2012-2013 Heikki Nousiainen, F-Secure
 See LICENSE for details
 """
 
-from . import frontend
+from distci.frontend import frontend
 
 Frontend = frontend.Frontend
 

@@ -15,7 +15,7 @@ import threading
 import urllib2
 import wsgiref.simple_server
 
-import frontend
+from distci.frontend import frontend
 
 class BackgroundHttpServer:
     def __init__(self, server):
