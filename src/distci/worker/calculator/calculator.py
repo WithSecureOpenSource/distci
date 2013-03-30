@@ -11,8 +11,7 @@ from distci.worker import worker_base
 
 class CalculatorWorker(worker_base.WorkerBase):
     def __init__(self, config):
-        worker_base.WorkerBase.__init__(self)
-        self.worker_config = config
+        worker_base.WorkerBase.__init__(self, config)
         self.worker_config['capabilities'] = ['calculator']
 
     def start(self):

@@ -17,63 +17,26 @@ class Client(object):
         self.client_config = client_config
         self.log = logging.getLogger('DistCIClient')
 
-    def _do_get_request(self, base_url, command):
-        """ Internal helper for HTTP GET requests """
+    def _do_request(self, base_url, method, command, extra_headers=None, data=None, content_type="application/json"):
+        """ Internal helper for HTTP requests """
         parsed = urlparse.urlsplit(base_url)
         resource = urlparse.urljoin(parsed.path, command)
-        conn = httplib.HTTPConnection(parsed.netloc)
-        conn.request("GET", resource)
-        response = conn.getresponse()
-        if response.status >= 200 and response.status < 300:
-            return response.status, response.read()
+        if parsed.scheme == 'http':
+            conn = httplib.HTTPConnection(parsed.netloc)
         else:
-            return response.status, None
-
-    def _do_post_request(self, base_url, command, data=None):
-        """ Internal helper for HTTP POST requests """
-        parsed = urlparse.urlsplit(base_url)
-        resource = urlparse.urljoin(parsed.path, command)
-        conn = httplib.HTTPConnection(parsed.netloc)
+            conn = httplib.HTTPSConnection(parsed.netloc)
+        headers = {}
+        if extra_headers:
+            headers.update(extra_headers)
         if data is not None:
-            headers = { "Content-Type": "application/json",
-                        "Content-Length": str(len(data)) }
-            conn.request("POST", resource, data, headers)
+            headers.update({ "Content-Type": content_type,
+                             "Content-Length": str(len(data)) })
+            conn.request(method, resource, data, headers)
         else:
-            conn.request("POST", resource)
+            headers.update({ "Content-Length": "0" })
+            conn.request(method, resource, None, headers)
         response = conn.getresponse()
-        if response.status >= 200 and response.status < 300:
-            return response.status, response.read()
-        else:
-            return response.status, None
-
-    def _do_put_request(self, base_url, command, data=None):
-        """ Internal helper for HTTP PUT requests """
-        parsed = urlparse.urlsplit(base_url)
-        resource = urlparse.urljoin(parsed.path, command)
-        conn = httplib.HTTPConnection(parsed.netloc)
-        if data is not None:
-            headers = { "Content-Type": "application/json",
-                        "Content-Length": str(len(data)) }
-            conn.request("PUT", resource, data, headers)
-        else:
-            conn.request("PUT", resource)
-        response = conn.getresponse()
-        if response.status >= 200 and response.status < 300:
-            return response.status, response.read()
-        else:
-            return response.status, None
-
-    def _do_delete_request(self, base_url, command):
-        """ Internal helper for HTTP DELETE requests """
-        parsed = urlparse.urlsplit(base_url)
-        resource = urlparse.urljoin(parsed.path, command)
-        conn = httplib.HTTPConnection(parsed.netloc)
-        conn.request("DELETE", resource)
-        response = conn.getresponse()
-        if response.status >= 200 and response.status < 300:
-            return response.status, response.read()
-        else:
-            return response.status, None
+        return response.status, response.read()
 
     def _create_task_command(self, task_id=None):
         """ Create URL path related to task requests """
@@ -101,7 +64,7 @@ class Client(object):
         base_url = random.choice(self.client_config['task_frontends'])
         command = self._create_task_command()
         try:
-            code, data = self._do_get_request(base_url, command)
+            code, data = self._do_request(base_url, 'GET', command)
         except:
             return None
         if code == 200 and data is not None:
@@ -118,7 +81,7 @@ class Client(object):
         base_url = random.choice(self.client_config['task_frontends'])
         command = self._create_task_command(task_id)
         try:
-            code, data = self._do_get_request(base_url, command)
+            code, data = self._do_request(base_url, 'GET', command)
         except:
             return None
         if code == 200 and data is not None:
@@ -136,7 +99,7 @@ class Client(object):
         command = self._create_task_command()
         task_data = json.dumps({"status": "creating"})
         try:
-            code, data = self._do_post_request(base_url, command, task_data)
+            code, data = self._do_request(base_url, 'POST', command, data=task_data)
         except:
             return None
         if code == 201 and data is not None:
@@ -154,7 +117,7 @@ class Client(object):
         command = self._create_task_command(task_id)
         task_data = json.dumps(task_description)
         try:
-            code, data = self._do_put_request(base_url, command, task_data)
+            code, data = self._do_request(base_url, 'PUT', command, data=task_data)
         except:
             return None
         if code == 200 and data is not None:
@@ -171,7 +134,7 @@ class Client(object):
         base_url = random.choice(self.client_config['task_frontends'])
         command = self._create_task_command(task_id)
         try:
-            code, _ = self._do_delete_request(base_url, command)
+            code, _ = self._do_request(base_url, 'DELETE', command)
         except:
             return False
         if code == 204:
@@ -212,7 +175,7 @@ class Client(object):
     def update_task(self, task_id, task_description, retries=10):
         """ Update task contents """
         for _ in range(retries):
-            task_data = self.update_task(task_id, task_description)
+            task_data = self._update_task(task_id, task_description)
             if task_data is not None:
                 return task_data
         return None
