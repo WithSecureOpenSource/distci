@@ -147,7 +147,31 @@ class TestJobsBuilds:
         response = self.app.request('/jobs/%s/builds/%s/console' % (self.test_state['job_id'], self.test_state['build_number']))
         assert response.body == 'line1\nline2\n', "Wrong content"
 
-    def test_06_delete_build(self):
+    def test_06_set_workspace(self):
+        request = TestRequest.blank('/jobs/%s/builds/%s/workspace' % (self.test_state['job_id'], self.test_state['build_number']), content_type='application/octet-stream')
+        request.method = 'PUT'
+        request.body = 'test_content'
+        _ = self.app.do_request(request, 204, False)
+
+    def test_07_get_workspace(self):
+        response = self.app.request('/jobs/%s/builds/%s/workspace' % (self.test_state['job_id'], self.test_state['build_number']))
+        assert response.body == 'test_content', "Wrong data"
+
+    def test_08_update_workspace(self):
+        request = TestRequest.blank('/jobs/%s/builds/%s/workspace' % (self.test_state['job_id'], self.test_state['build_number']), content_type='application/octet-stream')
+        request.method = 'PUT'
+        request.body = 'updated_test_content'
+        _ = self.app.do_request(request, 204, False)
+
+        response = self.app.request('/jobs/%s/builds/%s/workspace' % (self.test_state['job_id'], self.test_state['build_number']))
+        assert response.body == 'updated_test_content', "Wrong data"
+
+    def test_09_delete_workspace(self):
+        request = TestRequest.blank('/jobs/%s/builds/%s/workspace' % (self.test_state['job_id'], self.test_state['build_number']))
+        request.method = 'DELETE'
+        _ = self.app.do_request(request, 204, False)
+
+    def test_10_delete_build(self):
         request = TestRequest.blank('/jobs/%s/builds/%s' % (self.test_state['job_id'], self.test_state['build_number']))
         request.method = 'DELETE'
         _ = self.app.do_request(request, 204, False)

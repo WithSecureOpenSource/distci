@@ -6,6 +6,7 @@ setup(
     version = version.git_version(),
     packages = [ 'distci',
                  'distci.frontend',
+                 'distci.distcilib',
                  'distci.worker',
                  'distci.worker.calculator' ],
     package_dir = { 'distci': 'src' },
