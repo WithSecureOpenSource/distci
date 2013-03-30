@@ -7,7 +7,7 @@ See LICENSE for details
 
 import json
 
-from . import dispatcher
+from distci.frontend import dispatcher
 
 class Frontend(object):
     def __init__(self, config):

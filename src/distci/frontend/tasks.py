@@ -12,7 +12,7 @@ import shutil
 import logging
 import time
 
-from . import validators, response, request, distlocks, constants
+from distci.frontend import validators, response, request, distlocks, constants
 
 class Tasks(object):
     def __init__(self, config):
