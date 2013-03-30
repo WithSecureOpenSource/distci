@@ -15,6 +15,7 @@ ERROR_BUILD_INVALID_PAYLOAD    = 'Decoding build data failed'
 ERROR_BUILD_NOT_FOUND          = 'Build not found'
 ERROR_BUILD_LOCKED             = 'Build locked'
 ERROR_BUILD_CREATE_FAILED      = 'Failed to allocate a new build'
+ERROR_BUILD_READ_FAILED        = 'Read error'
 ERROR_BUILD_WRITE_FAILED       = 'Write error'
 ERROR_BUILD_TASK_CREATION_FAILED = 'Failed to create build control task'
 
