@@ -94,6 +94,10 @@ class Jobs(object):
                 lock.close()
             return response.send_error(start_response, 500, constants.ERROR_JOB_CONFIG_WRITE_FAILED)
 
+        if lock:
+            lock.unlock()
+            lock.close()
+
         return response.send_response(start_response, 200 if job_id_param else 201, json.dumps({'job_id':job_id, 'config':job_config}))
 
     def delete_job(self, start_response, job_id):
