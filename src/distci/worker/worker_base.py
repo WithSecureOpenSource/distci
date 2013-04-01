@@ -23,7 +23,7 @@ class WorkerBase(object):
 
     def fetch_task(self, timeout=None):
         start_timestamp = time.time()
-        while timeout is None or time.time() < start_timestamp + timeout:
+        while True:
             tasks = self.distci_client.list_tasks(retries=1)
             if tasks is not None:
                 random.shuffle(tasks['tasks'])
@@ -43,8 +43,11 @@ class WorkerBase(object):
                         return task
                     else:
                         self.log.debug("Failed to claim the task '%s'" % entry['id'])
-            if timeout is not None or time.time() >= start_timestamp + timeout:
-                time.sleep(self.worker_config.get('poll_interval', 10))
+            if timeout is not None:
+                if time.time() < start_timestamp + timeout:
+                    time.sleep(self.worker_config.get('poll_interval', 10))
+                else:
+                    break
         return None
 
     def update_task(self, task):

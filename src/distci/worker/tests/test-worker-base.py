@@ -67,7 +67,7 @@ class TestWorkerBase:
         shutil.rmtree(cls.data_directory)
 
     def test_01_list_tasks_empty(self):
-        task = self.worker.fetch_task(1)
+        task = self.worker.fetch_task(0)
         assert task is None, "didn't expect task to be returned"
 
     def test_02_post_task(self):
@@ -77,10 +77,10 @@ class TestWorkerBase:
         assert task_data is not None, "failed to post new task"
 
     def test_03_fetch_task(self):
-        task = self.worker.fetch_task(1)
+        task = self.worker.fetch_task(0)
         assert task is not None, "failed to allocate our task"
 
     def test_04_fetch_task_with_all_assigned(self):
-        task = self.worker.fetch_task(1)
+        task = self.worker.fetch_task(0)
         assert task is None, "didn't expect task to be returned"
 
