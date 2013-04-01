@@ -29,7 +29,7 @@ class WorkerBase(object):
                 random.shuffle(tasks['tasks'])
                 for entry in tasks['tasks']:
                     self.log.debug('Entry: %r', entry)
-                    task = task_base.GenericTask(entry['data'])
+                    task = task_base.GenericTask(entry['data'], entry['id'])
                     if task is None or task.config.get('assignee') is not None or task.config.get('status') != 'pending':
                         self.log.debug('Task %s is not for up to grabs' % entry['id'])
                         continue
@@ -38,7 +38,6 @@ class WorkerBase(object):
                         continue
                     task.config['assignee'] = self.uuid
                     task.config['status'] = 'running'
-                    task.id = entry['id']
                     if self.update_task(task):
                         return task
                     else:
@@ -50,19 +49,24 @@ class WorkerBase(object):
                     break
         return None
 
+    def get_task(self, task_id):
+        task_data = self.distci_client.get_task(task_id,
+                                                self.worker_config.get('retry_count', 10))
+        if task_data is not None:
+            return task_base.GenericTask(task_data, task_id)
+        return None
+
     def update_task(self, task):
-        for _ in range(self.worker_config.get('retry_count', 10)):
-            task_data = self.distci_client.update_task(task.id, task.config, 1)
-            if task_data != None:
-                return True
-            time.sleep(self.worker_config.get('poll_interval', 10))
-        return False
+        task_data = self.distci_client.update_task(task.id,
+                                                   task.config,
+                                                   self.worker_config.get('retry_count', 10))
+        if task_data is not None:
+            return task_base.GenericTask(task_data['data'], task.id)
+        return None
 
     def post_new_task(self, task):
-        for _ in range(self.worker_config.get('retry_count', 10)):
-            task_data = self.distci_client.create_task(task.config, retries=1)
-            if task_data is not None:
-                return task_data
-            time.sleep(self.worker_config.get('poll_interval', 10))
+        task_data = self.distci_client.create_task(task.config, self.worker_config.get('retry_count', 10))
+        if task_data is not None:
+            return task_base.GenericTask(task_data['data'], task.id)
         return None
 

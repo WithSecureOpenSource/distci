@@ -58,6 +58,8 @@ class TestWorkerBase:
                           'task_frontends': [ 'http://localhost:8800/' ] }
         cls.worker = worker_base.WorkerBase(worker_config)
 
+        cls.test_state = {}
+
     @classmethod
     def tearDownClass(cls):
         cls.slave.running = False
@@ -75,12 +77,17 @@ class TestWorkerBase:
                                           'capabilities': ['test']})
         task_data = self.worker.post_new_task(new_task)
         assert task_data is not None, "failed to post new task"
+        self.test_state['task_id'] = task_data.id
 
     def test_03_fetch_task(self):
         task = self.worker.fetch_task(0)
         assert task is not None, "failed to allocate our task"
 
-    def test_04_fetch_task_with_all_assigned(self):
+    def test_04_get_task(self):
+        task = self.worker.get_task(self.test_state['task_id'])
+        assert task is not None, "failed to get task data"
+
+    def test_05_fetch_task_with_all_assigned(self):
         task = self.worker.fetch_task(0)
         assert task is None, "didn't expect task to be returned"
 
