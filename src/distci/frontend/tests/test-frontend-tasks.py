@@ -55,7 +55,7 @@ class TestTasks:
 
     def test_03_check_single_task(self):
         task_id = self.test_state.get('id')
-        if task_id is None:        
+        if task_id is None:
             raise SkipTest("Skipping test for single task status, no recorded state")
         response = self.app.request('/tasks/%s' % task_id)
         result = json.loads(response.body)
@@ -64,7 +64,7 @@ class TestTasks:
 
     def test_04_update(self):
         task_id = self.test_state.get('id')
-        if task_id is None:        
+        if task_id is None:
             raise SkipTest("Skipping test for single task update, no recorded state")
         new_task_data = json.dumps({'command': 'something_else', 'assignee': 'my-id'})
         request = TestRequest.blank('/tasks/%s' % task_id, content_type='application/json')
@@ -79,7 +79,7 @@ class TestTasks:
 
     def test_05_update_with_wrong_assignee(self):
         task_id = self.test_state.get('id')
-        if task_id is None:        
+        if task_id is None:
             raise SkipTest("Skipping test for single task update, no recorded state")
         new_task_data = json.dumps({'command': 'something_else', 'assignee': 'my-id-not-same'})
         request = TestRequest.blank('/tasks/%s' % task_id, content_type='application/json')
@@ -95,7 +95,7 @@ class TestTasks:
 
     def test_07_delete(self):
         task_id = self.test_state.get('id')
-        if task_id is None:        
+        if task_id is None:
             raise SkipTest("Skipping test for single task status, no recorded state")
         request = TestRequest.blank('/tasks/%s' % task_id)
         request.method = 'DELETE'

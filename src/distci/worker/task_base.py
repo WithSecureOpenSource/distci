@@ -8,8 +8,8 @@ See LICENSE for details
 import json
 
 class GenericTask(object):
-    def __init__(self, task_data):
-        self.id = None
+    def __init__(self, task_data, task_id=None):
+        self.id = task_id
         self.config = task_data
 
     def dumps(self):
