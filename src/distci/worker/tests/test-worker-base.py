@@ -19,13 +19,9 @@ from distci.worker import task_base
 class BackgroundHttpServer:
     def __init__(self, server):
         self.server = server
-        self.running = True
 
     def serve(self):
-        while True:
-            if self.running == False:
-                break
-            self.server.handle_request()
+        self.server.serve_forever()
 
 class SilentWSGIRequestHandler(wsgiref.simple_server.WSGIRequestHandler):
     def log_message(self, *args):
@@ -58,16 +54,16 @@ class TestWorkerBase:
                           'task_frontends': [ 'http://localhost:8800/' ] }
         cls.worker = worker_base.WorkerBase(worker_config)
 
+        cls.test_state = {}
+
     @classmethod
     def tearDownClass(cls):
-        cls.slave.running = False
-        r = urllib2.urlopen('http://localhost:8800/')
-        _ = r.read()
+        cls.server.shutdown()
         cls.slave_thread.join()
         shutil.rmtree(cls.data_directory)
 
     def test_01_list_tasks_empty(self):
-        task = self.worker.fetch_task(1)
+        task = self.worker.fetch_task(0)
         assert task is None, "didn't expect task to be returned"
 
     def test_02_post_task(self):
@@ -75,12 +71,17 @@ class TestWorkerBase:
                                           'capabilities': ['test']})
         task_data = self.worker.post_new_task(new_task)
         assert task_data is not None, "failed to post new task"
+        self.test_state['task_id'] = task_data.id
 
     def test_03_fetch_task(self):
-        task = self.worker.fetch_task(1)
+        task = self.worker.fetch_task(0)
         assert task is not None, "failed to allocate our task"
 
-    def test_04_fetch_task_with_all_assigned(self):
-        task = self.worker.fetch_task(1)
+    def test_04_get_task(self):
+        task = self.worker.get_task(self.test_state['task_id'])
+        assert task is not None, "failed to get task data"
+
+    def test_05_fetch_task_with_all_assigned(self):
+        task = self.worker.fetch_task(0)
         assert task is None, "didn't expect task to be returned"
 
