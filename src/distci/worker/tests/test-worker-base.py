@@ -19,13 +19,9 @@ from distci.worker import task_base
 class BackgroundHttpServer:
     def __init__(self, server):
         self.server = server
-        self.running = True
 
     def serve(self):
-        while True:
-            if self.running == False:
-                break
-            self.server.handle_request()
+        self.server.serve_forever()
 
 class SilentWSGIRequestHandler(wsgiref.simple_server.WSGIRequestHandler):
     def log_message(self, *args):
@@ -62,9 +58,7 @@ class TestWorkerBase:
 
     @classmethod
     def tearDownClass(cls):
-        cls.slave.running = False
-        r = urllib2.urlopen('http://localhost:8800/')
-        _ = r.read()
+        cls.server.shutdown()
         cls.slave_thread.join()
         shutil.rmtree(cls.data_directory)
 
