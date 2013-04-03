@@ -13,7 +13,7 @@ import shutil
 
 from distci.frontend import validators, request, response, jobs_builds_artifacts, distlocks, constants
 
-from distci.distcilib import client
+from distci import distcilib
 
 class JobsBuilds(object):
     """ Class for handling build related requests """
@@ -24,7 +24,7 @@ class JobsBuilds(object):
         if len(self.zknodes) == 0:
             self.zknodes = None
         self.jobs_builds_artifacts = jobs_builds_artifacts.JobsBuildsArtifacts(config)
-        self.distci_client = client.Client(config)
+        self.distci_client = distcilib.DistCIClient(config)
 
     def _job_dir(self, job_id):
         """ Return directory for a specific job """
@@ -108,13 +108,25 @@ class JobsBuilds(object):
             self.log.debug('Failed to write build state, job_id %s, build %s', job_id, new_build_number)
             return response.send_error(start_response, 500, constants.ERROR_BUILD_WRITE_FAILED)
 
+        for _ in range(10):
+            task_id = self.distci_client.tasks.create()
+            if task_id is not None:
+                break
+        if task_id is None:
+            self.log.error('Failed to create a build task')
+            return response.send_error(start_response, 500, constants.ERROR_BUILD_TASK_CREATION_FAILED)
+
         task_description = { 'capabilities': [ 'build_control_v1' ],
                              'job_id': job_id,
                              'build_number': new_build_number,
-                             'status': 'pending' }
+                             'status': 'pending',
+                             'id': task_id }
 
-        task_details = self.distci_client.create_task(task_description)
-        if task_details is None or not task_details.has_key('id'):
+        for _ in range(10):
+            task_details = self.distci_client.tasks.update(task_id, task_description)
+            if task_details is not None:
+                break
+        if task_details is None:
             self.log.error("Build task creation failed")
             return response.send_error(start_response, 500, constants.ERROR_BUILD_TASK_CREATION_FAILED)
 
