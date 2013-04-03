@@ -34,7 +34,7 @@ class WorkerBase(object):
                         self.log.debug('Task %s is not for up to grabs' % entry['id'])
                         continue
                     if set(task.config['capabilities']) != set(task.config['capabilities']) & set(self.worker_config['capabilities']):
-                        self.log.debug("Task %s doesn't match our capabilities")
+                        self.log.debug("Task %s doesn't match our capabilities", entry['id'])
                         continue
                     task.config['assignee'] = self.uuid
                     task.config['status'] = 'running'
