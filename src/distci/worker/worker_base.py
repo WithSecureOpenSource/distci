@@ -10,7 +10,7 @@ import time
 import random
 import logging
 
-from distci.distcilib import client
+from distci import distcilib
 
 from . import task_base
 
@@ -19,12 +19,12 @@ class WorkerBase(object):
         self.worker_config = config
         self.uuid = str(uuid.uuid4())
         self.log = logging.getLogger('WorkerBase')
-        self.distci_client = client.Client(config)
+        self.distci_client = distcilib.DistCIClient(config)
 
     def fetch_task(self, timeout=None):
         start_timestamp = time.time()
         while True:
-            tasks = self.distci_client.list_tasks(retries=1)
+            tasks = self.distci_client.tasks.list()
             if tasks is not None:
                 random.shuffle(tasks['tasks'])
                 for entry in tasks['tasks']:
@@ -50,23 +50,28 @@ class WorkerBase(object):
         return None
 
     def get_task(self, task_id):
-        task_data = self.distci_client.get_task(task_id,
-                                                self.worker_config.get('retry_count', 10))
-        if task_data is not None:
-            return task_base.GenericTask(task_data, task_id)
+        for _ in range(self.worker_config.get('retry_count', 10)):
+            task_descr = self.distci_client.tasks.get(task_id)
+            if task_descr is not None:
+                return task_base.GenericTask(task_descr, task_id)
         return None
 
     def update_task(self, task):
-        task_data = self.distci_client.update_task(task.id,
-                                                   task.config,
-                                                   self.worker_config.get('retry_count', 10))
-        if task_data is not None:
-            return task_base.GenericTask(task_data['data'], task.id)
+        for _ in range(self.worker_config.get('retry_count', 10)):
+            task_descr = self.distci_client.tasks.update(task.id,
+                                                         task.config)
+            if task_descr is not None:
+                return task_base.GenericTask(task_descr, task.id)
         return None
 
     def post_new_task(self, task):
-        task_data = self.distci_client.create_task(task.config, self.worker_config.get('retry_count', 10))
-        if task_data is not None:
-            return task_base.GenericTask(task_data['data'], task.id)
+        task_id = None
+        for _ in range(self.worker_config.get('retry_count', 10)):
+            if task_id is None:
+                task_id = self.distci_client.tasks.create()
+            if task_id is not None:
+                task_descr = self.distci_client.tasks.update(task_id, task.config)
+                if task_descr is not None:
+                    return task_base.GenericTask(task_descr, task_id)
         return None
 
