@@ -11,22 +11,8 @@ import json
 import tempfile
 import os
 import shutil
-import threading
-import urllib2
-import wsgiref.simple_server
 
 from distci.frontend import frontend
-
-class BackgroundHttpServer:
-    def __init__(self, server):
-        self.server = server
-
-    def serve(self):
-        self.server.serve_forever()
-
-class SilentWSGIRequestHandler(wsgiref.simple_server.WSGIRequestHandler):
-    def log_message(self, *args):
-        pass
 
 class TestJobsBuildArtifacts:
     app = None
@@ -38,23 +24,14 @@ class TestJobsBuildArtifacts:
     def setUpClass(cls):
         cls.data_directory = tempfile.mkdtemp()
         os.mkdir(os.path.join(cls.data_directory, 'jobs'))
-        os.mkdir(os.path.join(cls.data_directory, 'tasks'))
 
-        config = { "data_directory": cls.data_directory,
-                   "task_frontends": ['http://localhost:9988/'] }
+        config = { "data_directory": cls.data_directory }
 
         cls.frontend_app = frontend.Frontend(config)
         cls.app = TestApp(cls.frontend_app.handle_request)
 
-        cls.server = wsgiref.simple_server.make_server('localhost', 9988, cls.frontend_app.handle_request, handler_class=SilentWSGIRequestHandler)
-        cls.slave = BackgroundHttpServer(cls.server)
-        cls.slave_thread = threading.Thread(target=cls.slave.serve)
-        cls.slave_thread.start()
-
     @classmethod
     def tearDownClass(cls):
-        cls.server.shutdown()
-        cls.slave_thread.join()
         cls.app = None
         shutil.rmtree(cls.data_directory)
 
