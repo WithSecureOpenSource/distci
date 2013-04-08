@@ -37,7 +37,7 @@ class RESTHelper(object):
             headers.update({ "Content-Length": "0" })
             conn.request(method, resource, None, headers)
         response = conn.getresponse()
-        return response.status, response.read()
+        return response
 
     def do_task_request(self, method, task_id, **kwargs):
         """ Perform a request on task frontends """
@@ -58,6 +58,19 @@ class RESTHelper(object):
             path = 'jobs'
         else:
             path = 'jobs/%s' % job_id
+        return self._do_request(base_url,
+                                method,
+                                path,
+                                **kwargs)
+
+    def do_build_request(self, method, job_id, build_id, subcommand, **kwargs):
+        """ Perform a build related request on frontends """
+        base_url = random.choice(self.parent.config['frontends'])
+        path = 'jobs/%s/builds' % job_id
+        if build_id is not None:
+            path = '%s/%s' % (path, build_id)
+            if subcommand is not None:
+                path = '%s/%s' % (path, subcommand)
         return self._do_request(base_url,
                                 method,
                                 path,
