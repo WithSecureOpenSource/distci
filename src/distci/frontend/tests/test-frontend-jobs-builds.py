@@ -29,25 +29,31 @@ class SilentWSGIRequestHandler(wsgiref.simple_server.WSGIRequestHandler):
         pass
 
 class TestJobsBuilds:
+    frontend_app = None
     app = None
     config_file = None
     data_directory = None
     test_state = {}
 
     @classmethod
+    def route_request(cls, environ, start_request):
+        return cls.frontend_app.handle_request(environ, start_request)
+
+    @classmethod
     def setUpClass(cls):
-        cls.data_directory = '/Users/noushe/CI-proto'
         cls.data_directory = tempfile.mkdtemp()
         os.mkdir(os.path.join(cls.data_directory, 'jobs'))
         os.mkdir(os.path.join(cls.data_directory, 'tasks'))
 
+        cls.server = wsgiref.simple_server.make_server('localhost', 0, cls.route_request, handler_class=SilentWSGIRequestHandler)
+        cls.server_port = cls.server.socket.getsockname()[1]
+
         config = { "data_directory": cls.data_directory,
-                   "task_frontends": ['http://localhost:9989/'] }
+                   "task_frontends": [ 'http://localhost:%d/' % cls.server_port ] }
 
         cls.frontend_app = frontend.Frontend(config)
         cls.app = TestApp(cls.frontend_app.handle_request)
 
-        cls.server = wsgiref.simple_server.make_server('localhost', 9989, cls.frontend_app.handle_request, handler_class=SilentWSGIRequestHandler)
         cls.slave = BackgroundHttpServer(cls.server)
         cls.slave_thread = threading.Thread(target=cls.slave.serve)
         cls.slave_thread.start()

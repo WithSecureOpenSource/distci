@@ -21,5 +21,6 @@ ERROR_BUILD_TASK_CREATION_FAILED = 'Failed to create build control task'
 
 ERROR_ARTIFACT_INVALID_ID      = 'Invalid artifact ID'
 ERROR_ARTIFACT_NOT_FOUND       = 'Artifact not found'
+ERROR_ARTIFACT_READ_FAILED     = 'Read error'
 ERROR_ARTIFACT_WRITE_FAILED    = 'Write error'
 

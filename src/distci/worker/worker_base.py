@@ -9,6 +9,10 @@ import uuid
 import time
 import random
 import logging
+import tempfile
+import tarfile
+import os
+import shutil
 
 from distci import distcilib
 
@@ -74,4 +78,59 @@ class WorkerBase(object):
                 if task_descr is not None:
                     return task_base.GenericTask(task_descr, task_id)
         return None
+
+    def fetch_workspace(self, job_id, build_id):
+        archive = None
+        for _ in range(self.worker_config.get('retry_count', 10)):
+            archive = tempfile.TemporaryFile()
+            if self.distci_client.builds.workspace.get(job_id, build_id, archive) == True:
+                break
+            archive.close()
+            archive = None
+
+        if archive is None:
+            return None
+
+        archive.seek(0)
+        wsdir = tempfile.mkdtemp()
+        tarf = tarfile.open(fileobj=archive, mode='r')
+        for member in tarf.getmembers():
+            absname = os.path.abspath(os.path.join(wsdir, member.name))
+            if ((not absname.startswith('%s%s' % (wsdir, os.path.sep))) or
+                (not (member.isreg() or member.issym() or member.isdir()))):
+                tarf.close()
+                archive.close()
+                shutil.rmtree(wsdir)
+                return None
+
+        tarf.extractall(wsdir)
+        tarf.close()
+        archive.close()
+
+        return wsdir
+
+    def send_workspace(self, job_id, build_id, workspace):
+        archive = tempfile.TemporaryFile()
+        tarf = tarfile.open(fileobj=archive, mode='w:gz')
+
+        for root_file in os.listdir(workspace):
+            tarf.add(os.path.join(workspace, root_file), root_file)
+
+        tarf.close()
+        ws_len = archive.tell()
+
+        for _ in range(self.worker_config.get('retry_count', 10)):
+            archive.seek(0)
+            if self.distci_client.builds.workspace.put(job_id, build_id, archive, ws_len) == True:
+                archive.close()
+                return True
+        archive.close()
+        return False
+
+    def delete_workspace(self, workspace):
+        try:
+            shutil.rmtree(workspace)
+        except OSError:
+            return False
+        return True
 

@@ -1,18 +1,18 @@
 """
-Entrypoint for calculator worker
+Entrypoint for execute shell worker
 
-Copyright (c) 2012-2013 Heikki Nousiainen, F-Secure
+Copyright (c) 2013 Heikki Nousiainen, F-Secure
 See LICENSE for details
 """
 
 import json
 import optparse
-import os
 import sys
+import logging
 
-from . import calculator
+from . import execute_shell
 
-__appname__ = "calculator worker"
+__appname__ = "execute shell worker"
 __usage__   = "%prog -c <configuration file>"
 __version__ = "1.0"
 __author__  = "Heikki Nousiainen"
@@ -39,7 +39,7 @@ def main(argv):
         log_level = logging._levelNames.get(config.get('log_level', 'info').upper())
         logging.basicConfig(level=log_level, format='%(asctime)s\t%(threadName)s\t%(name)s\t%(levelname)s\t%(message)s', filename=config.get('log_file'))
 
-    worker = calculator.CalculatorWorker(config)
+    worker = execute_shell.ExecuteShellWorker(config)
     return worker.start()
 
 def main_entry():
