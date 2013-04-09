@@ -108,27 +108,30 @@ class JobsBuilds(object):
             self.log.debug('Failed to write build state, job_id %s, build %s', job_id, new_build_number)
             return response.send_error(start_response, 500, constants.ERROR_BUILD_WRITE_FAILED)
 
-        for _ in range(10):
-            task_id = self.distci_client.tasks.create()
-            if task_id is not None:
-                break
-        if task_id is None:
-            self.log.error('Failed to create a build task')
-            return response.send_error(start_response, 500, constants.ERROR_BUILD_TASK_CREATION_FAILED)
+        if self.config.get('task_frontends'):
+            for _ in range(10):
+                task_id = self.distci_client.tasks.create()
+                if task_id is not None:
+                    break
+            if task_id is None:
+                self.log.error('Failed to create a build task')
+                return response.send_error(start_response, 500, constants.ERROR_BUILD_TASK_CREATION_FAILED)
 
-        task_description = { 'capabilities': [ 'build_control_v1' ],
-                             'job_id': job_id,
-                             'build_number': new_build_number,
-                             'status': 'pending',
-                             'id': task_id }
+            task_description = { 'capabilities': [ 'build_control_v1' ],
+                                 'job_id': job_id,
+                                 'build_number': new_build_number,
+                                 'status': 'pending',
+                                 'id': task_id }
 
-        for _ in range(10):
-            task_details = self.distci_client.tasks.update(task_id, task_description)
-            if task_details is not None:
-                break
-        if task_details is None:
-            self.log.error("Build task creation failed")
-            return response.send_error(start_response, 500, constants.ERROR_BUILD_TASK_CREATION_FAILED)
+            for _ in range(10):
+                task_details = self.distci_client.tasks.update(task_id, task_description)
+                if task_details is not None:
+                    break
+            if task_details is None:
+                self.log.error("Build task creation failed")
+                return response.send_error(start_response, 500, constants.ERROR_BUILD_TASK_CREATION_FAILED)
+        else:
+            self.log.warn('No task frontends configured, unable to trigger build control task')
 
         return response.send_response(start_response, 201, json.dumps({'job_id': job_id, 'build_number': int(new_build_number), 'state': build_state}))
 

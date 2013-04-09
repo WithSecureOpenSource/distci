@@ -11,5 +11,5 @@ clean:
 	rm -rf dist distci.egg-info build
 
 pylint:
-	python -m pylint.lint src/frontend/*.py
+	python -m pylint.lint src/distci/*/*.py
 

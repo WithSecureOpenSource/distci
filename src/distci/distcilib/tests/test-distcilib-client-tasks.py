@@ -42,14 +42,15 @@ class TestDistcilibClientTasks:
 
         cls.frontend_app = frontend.Frontend(frontend_config)
 
-        cls.server = wsgiref.simple_server.make_server('localhost', 8888, cls.frontend_app.handle_request, handler_class=SilentWSGIRequestHandler)
+        cls.server = wsgiref.simple_server.make_server('localhost', 0, cls.frontend_app.handle_request, handler_class=SilentWSGIRequestHandler)
+        cls.server_port = cls.server.socket.getsockname()[1]
 
         cls.slave = BackgroundHttpServer(cls.server)
         cls.slave_thread = threading.Thread(target=cls.slave.serve)
         cls.slave_thread.start()
 
-        client_config = { 'frontends': [ 'http://localhost:8888/' ],
-                          'task_frontends' : [ 'http://localhost:8888/' ] }
+        client_config = { 'frontends': [ 'http://localhost:%d/' % cls.server_port ],
+                          'task_frontends' : [ 'http://localhost:%d/' % cls.server_port ] }
         cls.client = distcilib.DistCIClient(client_config)
 
         cls.state = { }

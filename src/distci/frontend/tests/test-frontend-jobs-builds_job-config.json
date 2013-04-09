@@ -15,7 +15,7 @@
         },
         "2":
         {
-            "type": "execute-script",
+            "type": "execute-shell",
             "params":
             {
                 "working_directory": "distci",
@@ -24,7 +24,7 @@
         },
         "3":
         {
-            "type": "execute-script",
+            "type": "execute-shell",
             "params":
             {
                 "working_directory": "distci",
@@ -34,7 +34,7 @@
         "4":
         {
             "type": "publish-artifacts",
-            "parameters":
+            "params":
             {
                 "artifacts": ["distci/dist/*.egg", "distci/build.log" ]
             }
