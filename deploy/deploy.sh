@@ -30,7 +30,7 @@ then
     exit 127
 fi
 
-poni cloud init distci --wait 
+poni cloud init distci --wait
 
 poni cloud update distci
 
@@ -46,5 +46,8 @@ poni control ceph-storage-setup install-stage3
 
 poni control frontend-setup install
 
-poni control calculator-worker-setup install
+poni control build-control-worker-setup install
+poni control git-checkout-worker-setup install
+poni control execute-shell-worker-setup install
+poni control publish-artifacts-worker-setup install
 

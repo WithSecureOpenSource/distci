@@ -1,20 +1,20 @@
 #! /bin/sh
 
 ### BEGIN INIT INFO
-# Provides:          distci-calculator-worker
+# Provides:          distci-publish-artifacts-worker
 # Required-Start:    $local_fs $remote_fs $network $syslog
 # Required-Stop:     $local_fs $remote_fs $network $syslog
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
-# Short-Description: starts DistCI calculator worker
-# Description:       starts DistCI calculator worker using start-stop-daemon
+# Short-Description: starts DistCI publish artifacts worker
+# Description:       starts DistCI publish artifacts worker using start-stop-daemon
 ### END INIT INFO
 
-SERVER=/usr/local/bin/distci-calculator-worker
-NAME=distci-calculator-worker
-DESC="DistCI calculator worker"
-PIDFILE=/var/run/distci-calculator-calculator.pid
-PARAMS="-c /etc/distci/worker/calculator.conf"
+SERVER=/usr/local/bin/distci-publish-artifacts-worker
+NAME=distci-publish-artifacts-worker
+DESC="DistCI publish artifacts worker"
+PIDFILE=/var/run/distci-publish-artifacts-worker.pid
+PARAMS="-c /etc/distci/worker/publish-artifacts.conf"
 
 test -x $SERVER || exit 0
 

@@ -52,15 +52,15 @@ poni set distci/zookeeper/zknode1 cloud.vm_name=zknode1 zkindex=2
 poni add-node distci/zookeeper/zknode2
 poni set distci/zookeeper/zknode2 cloud.vm_name=zknode2 zkindex=3
 
-echo "Adding nodes 'distci/worker/calculatorN'"
-poni add-node distci/worker/calculator0
-poni set distci/worker/calculator0 cloud.vm_name=calculator0
+echo "Adding nodes 'distci/worker/wnodeN'"
+poni add-node distci/worker/wnode0
+poni set distci/worker/wnode0 cloud.vm_name=wnode0
 
-poni add-node distci/worker/calculator1
-poni set distci/worker/calculator1 cloud.vm_name=calculator1
+poni add-node distci/worker/wnode1
+poni set distci/worker/wnode1 cloud.vm_name=wnode1
 
-poni add-node distci/worker/calculator2
-poni set distci/worker/calculator2 cloud.vm_name=calculator2
+poni add-node distci/worker/wnode2
+poni set distci/worker/wnode2 cloud.vm_name=wnode2
 
 echo "Adding nodes 'distci/ceph-storage/cnodeN'"
 poni add-node distci/ceph-storage/cnode0
@@ -86,8 +86,17 @@ poni add-config distci/zookeeper/ zookeeper-setup
 poni update-config zookeeper-setup zookeeper/plugin.py zookeeper/zookeeper-install.sh zookeeper/zookeeper.conf zookeeper/zookeeper-myid
 
 echo "Configuring nodes 'distci/worker/*'"
-poni add-config distci/worker/calculator calculator-worker-setup
-poni update-config calculator-worker-setup calculator-worker/plugin.py calculator-worker/calculator-worker-install.sh calculator-worker/distci-calculator-worker.conf calculator-worker/distci-calculator-worker.init
+poni add-config distci/worker/ build-control-worker-setup
+poni update-config build-control-worker-setup build-control-worker/plugin.py build-control-worker/build-control-install.sh build-control-worker/build-control.conf build-control-worker/build-control.init
+
+poni add-config distci/worker/ git-checkout-worker-setupponi update-config git-checkout-worker-setup git-checkout-worker/plugin.py git-checkout-worker/git-checkout-install.sh git-checkout-worker/git-checkout.conf git-checkout-worker/git-checkout.init
+
+poni add-config distci/worker/ execute-shell-worker-setup
+poni update-config execute-shell-worker-setup execute-shell-worker/plugin.py execute-shell-worker/execute-shell-install.sh execute-shell-worker/execute-shell.conf execute-shell-worker/execute-shell.init
+
+poni add-config distci/worker/ publish-artifacts-worker-setup
+poni update-config publish-artifacts-worker-setup publish-artifacts-worker/plugin.py publish-artifacts-worker/publish-artifacts-install.sh publish-artifacts-worker/publish-artifacts.conf publish-artifacts-worker/publish-artifacts.init
+
 poni set distci/worker distci_eggs=$DISTCI_EGGS
 
 echo "Configuring nodes 'distci/ceph-storage/*'"
