@@ -1,19 +1,17 @@
 #!/bin/sh
 
-if [ -f /etc/init.d/distci-execute-shell-worker ]
+if [ -f /etc/supervisor/conf.d/distci-execute-shell-worker.conf ]
 then
-    /etc/init.d/distci-execute-shell-worker stop
+    supervisorctl stop distci-execute-shell-worker
 fi
 
-apt-get -y install python-setuptools
+apt-get -y install python-setuptools supervisor
 easy_install /root/deploy/worker/eggs/distci-*.egg
 
 mkdir -p /etc/distci/worker
 cp /root/deploy/worker/execute-shell-worker/execute-shell.conf /etc/distci/worker/execute-shell.conf
 
-cp /root/deploy/worker/execute-shell-worker/execute-shell.init /etc/init.d/distci-execute-shell-worker
-chmod u+x /etc/init.d/distci-execute-shell-worker
-update-rc.d distci-execute-shell-worker defaults
+cp /root/deploy/worker/execute-shell-worker/execute-shell.supervisor /etc/supervisor/conf.d/distci-execute-shell-worker.conf
 
-/etc/init.d/distci-execute-shell-worker start
+supervisorctl reload
 

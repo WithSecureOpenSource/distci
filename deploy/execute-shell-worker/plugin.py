@@ -4,7 +4,7 @@ from poni import config
 class PlugIn(config.PlugIn):
     def add_actions(self):
         self.add_file("execute-shell-install.sh", dest_path="/root/deploy/worker/execute-shell-worker/")
-        self.add_file("execute-shell.init", dest_path="/root/deploy/worker/execute-shell-worker/", render=self.render_text)
+        self.add_file("execute-shell.supervisor", dest_path="/root/deploy/worker/execute-shell-worker/")
         self.add_file("execute-shell.conf", dest_path="/root/deploy/worker/execute-shell-worker/")
         self.add_dir(self.node['distci_eggs'], dest_path="/root/deploy/worker/eggs/")
 
@@ -14,9 +14,9 @@ class PlugIn(config.PlugIn):
 
     @config.control()
     def start(self, arg):
-        self.remote_execute(arg, '/etc/init.d/distci-execute-shell-worker start')
+        self.remote_execute(arg, 'supervisorctl start distci-execute-shell-worker')
 
     @config.control()
     def stop(self, arg):
-        self.remote_execute(arg, '/etc/init.d/distci-execute-shell-worker stop')
+        self.remote_execute(arg, 'supervisorctl stop distci-execute-shell-worker')
 
