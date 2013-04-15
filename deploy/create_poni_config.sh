@@ -78,7 +78,7 @@ poni update-config nodes-prepare nodes-prepare/plugin.py nodes-prepare/node-prep
 
 echo "Configuring nodes 'distci/frontend/*'"
 poni add-config distci/frontend/ frontend-setup
-poni update-config frontend-setup frontend/plugin.py frontend/frontend-install.sh frontend/distci-frontend.init frontend/distci-frontend.conf frontend/distci-frontend.nginx
+poni update-config frontend-setup frontend/plugin.py frontend/frontend-install.sh frontend/distci-frontend.supervisor frontend/distci-frontend.conf frontend/distci-frontend.nginx
 poni set distci/frontend distci_eggs=$DISTCI_EGGS
 
 echo "Configuring nodes 'distci/zookeeper/*'"
@@ -87,15 +87,16 @@ poni update-config zookeeper-setup zookeeper/plugin.py zookeeper/zookeeper-insta
 
 echo "Configuring nodes 'distci/worker/*'"
 poni add-config distci/worker/ build-control-worker-setup
-poni update-config build-control-worker-setup build-control-worker/plugin.py build-control-worker/build-control-install.sh build-control-worker/build-control.conf build-control-worker/build-control.init
+poni update-config build-control-worker-setup build-control-worker/plugin.py build-control-worker/build-control-install.sh build-control-worker/build-control.conf build-control-worker/build-control.supervisor
 
-poni add-config distci/worker/ git-checkout-worker-setupponi update-config git-checkout-worker-setup git-checkout-worker/plugin.py git-checkout-worker/git-checkout-install.sh git-checkout-worker/git-checkout.conf git-checkout-worker/git-checkout.init
+poni add-config distci/worker/ git-checkout-worker-setup
+poni update-config git-checkout-worker-setup git-checkout-worker/plugin.py git-checkout-worker/git-checkout-install.sh git-checkout-worker/git-checkout.conf git-checkout-worker/git-checkout.supervisor
 
 poni add-config distci/worker/ execute-shell-worker-setup
-poni update-config execute-shell-worker-setup execute-shell-worker/plugin.py execute-shell-worker/execute-shell-install.sh execute-shell-worker/execute-shell.conf execute-shell-worker/execute-shell.init
+poni update-config execute-shell-worker-setup execute-shell-worker/plugin.py execute-shell-worker/execute-shell-install.sh execute-shell-worker/execute-shell.conf execute-shell-worker/execute-shell.supervisor
 
 poni add-config distci/worker/ publish-artifacts-worker-setup
-poni update-config publish-artifacts-worker-setup publish-artifacts-worker/plugin.py publish-artifacts-worker/publish-artifacts-install.sh publish-artifacts-worker/publish-artifacts.conf publish-artifacts-worker/publish-artifacts.init
+poni update-config publish-artifacts-worker-setup publish-artifacts-worker/plugin.py publish-artifacts-worker/publish-artifacts-install.sh publish-artifacts-worker/publish-artifacts.conf publish-artifacts-worker/publish-artifacts.supervisor
 
 poni set distci/worker distci_eggs=$DISTCI_EGGS
 

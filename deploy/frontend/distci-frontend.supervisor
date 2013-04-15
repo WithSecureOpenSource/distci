@@ -1,0 +1,3 @@
+[program:distci-frontend]
+command=/usr/local/bin/distci-frontend -c /etc/distci/frontend.conf
+

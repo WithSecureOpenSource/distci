@@ -1,0 +1,3 @@
+[program:distci-execute-shell-worker]
+command=/usr/local/bin/distci-execute-shell-worker -c /etc/distci/worker/execute-shell.conf
+

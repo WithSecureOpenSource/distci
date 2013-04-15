@@ -1,0 +1,3 @@
+[program:distci-build-control-worker]
+command=/usr/local/bin/distci-build-control-worker -c /etc/distci/worker/build-control.conf
+

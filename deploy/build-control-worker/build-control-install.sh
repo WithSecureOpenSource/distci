@@ -1,19 +1,17 @@
 #!/bin/sh
 
-if [ -f /etc/init.d/distci-build-control-worker ]
+if [ -f /etc/supervisor/conf.d/distci-build-control-worker.conf ]
 then
-    /etc/init.d/distci-build-control-worker stop
+    supervisorctl stop distci-build-control-worker
 fi
 
-apt-get -y install python-setuptools
+apt-get -y install python-setuptools supervisor
 easy_install /root/deploy/worker/eggs/distci-*.egg
 
 mkdir -p /etc/distci/worker
 cp /root/deploy/worker/build-control-worker/build-control.conf /etc/distci/worker/build-control.conf
 
-cp /root/deploy/worker/build-control-worker/build-control.init /etc/init.d/distci-build-control-worker
-chmod u+x /etc/init.d/distci-build-control-worker
-update-rc.d distci-build-control-worker defaults
+cp /root/deploy/worker/build-control-worker/build-control.supervisor /etc/supervisor/conf.d/distci-build-control-worker.conf
 
-/etc/init.d/distci-build-control-worker start
+supervisorctl reload
 
