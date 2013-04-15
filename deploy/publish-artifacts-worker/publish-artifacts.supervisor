@@ -1,0 +1,3 @@
+[program:distci-publish-artifacts-worker]
+command=/usr/local/bin/distci-publish-artifacts-worker -c /etc/distci/worker/publish-artifacts.conf
+

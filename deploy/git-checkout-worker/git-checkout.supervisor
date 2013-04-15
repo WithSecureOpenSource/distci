@@ -1,0 +1,3 @@
+[program:distci-git-checkout-worker]
+command=/usr/local/bin/distci-git-checkout-worker -c /etc/distci/worker/git-checkout.conf
+
