@@ -1,0 +1,35 @@
+{
+    "configuration-version": "2013-02-26",
+    "job_id": "distci",
+    "tasks":
+    {
+        "1":
+        {
+            "type": "git-checkout",
+            "params":
+            {
+                "repository": "https://github.com/F-Secure/distci.git",
+                "ref": "heads/master",
+                "checkout-dir": "distci"
+            }
+        },
+        "2":
+        {
+            "type": "execute-shell",
+            "params":
+            {
+                "working_directory": "distci",
+                "script": "apt-get install make\nmake tests\nmake\n"
+            }
+        },
+        "3":
+        {
+            "type": "publish-artifacts",
+            "params":
+            {
+                "artifacts": ["distci/dist/*.egg", "distci/build.log" ]
+            }
+        }
+    }
+}
+
