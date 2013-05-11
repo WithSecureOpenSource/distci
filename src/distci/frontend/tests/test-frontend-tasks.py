@@ -92,6 +92,9 @@ class TestTasks:
         result = json.loads(response.body)
         assert result.has_key('tasks'), "Tasks entry went missing"
         assert len(result['tasks']) == 1, "Invalid task count"
+        task_id = self.test_state.get('id')
+        if task_id is not None:
+            assert task_id in result['tasks'], "Task not included in the list"
 
     def test_07_delete(self):
         task_id = self.test_state.get('id')
