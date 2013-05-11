@@ -39,7 +39,7 @@ class WorkerBase(object):
                         if task is None or task.config.get('assignee') is not None or task.config.get('status') != 'pending':
                             self.log.debug('Task %s is not for up to grabs' % task_id)
                             continue
-                        if set(task.config['capabilities']) != set(task.config['capabilities']) & set(self.worker_config['capabilities']):
+                        if not set(task.config['capabilities']).issubset(set(self.worker_config['capabilities'])):
                             self.log.debug("Task %s doesn't match our capabilities", task_id)
                             continue
                         task.config['assignee'] = self.uuid
