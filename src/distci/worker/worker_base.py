@@ -31,21 +31,23 @@ class WorkerBase(object):
             tasks = self.distci_client.tasks.list()
             if tasks is not None:
                 random.shuffle(tasks['tasks'])
-                for entry in tasks['tasks']:
-                    self.log.debug('Entry: %r', entry)
-                    task = task_base.GenericTask(entry['data'], entry['id'])
-                    if task is None or task.config.get('assignee') is not None or task.config.get('status') != 'pending':
-                        self.log.debug('Task %s is not for up to grabs' % entry['id'])
-                        continue
-                    if set(task.config['capabilities']) != set(task.config['capabilities']) & set(self.worker_config['capabilities']):
-                        self.log.debug("Task %s doesn't match our capabilities", entry['id'])
-                        continue
-                    task.config['assignee'] = self.uuid
-                    task.config['status'] = 'running'
-                    if self.update_task(task):
-                        return task
-                    else:
-                        self.log.debug("Failed to claim the task '%s'" % entry['id'])
+                for task_id in tasks['tasks']:
+                    self.log.debug('Task: %r', task_id)
+                    task_data = self.distci_client.tasks.get(task_id)
+                    if task_data is not None:
+                        task = task_base.GenericTask(task_data, task_id)
+                        if task is None or task.config.get('assignee') is not None or task.config.get('status') != 'pending':
+                            self.log.debug('Task %s is not for up to grabs' % task_id)
+                            continue
+                        if set(task.config['capabilities']) != set(task.config['capabilities']) & set(self.worker_config['capabilities']):
+                            self.log.debug("Task %s doesn't match our capabilities", taks_id)
+                            continue
+                        task.config['assignee'] = self.uuid
+                        task.config['status'] = 'running'
+                        if self.update_task(task):
+                            return task
+                        else:
+                            self.log.debug("Failed to claim the task '%s'" % task_id)
             if timeout is not None:
                 if time.time() < start_timestamp + timeout:
                     time.sleep(self.worker_config.get('poll_interval', 10))
