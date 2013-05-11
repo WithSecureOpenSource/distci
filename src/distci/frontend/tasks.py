@@ -53,15 +53,7 @@ class Tasks(object):
         for task_id in task_ids:
             if not os.path.isdir(self._task_dir(task_id)):
                 continue
-            task_data = None
-            for _ in range(10):
-                try:
-                    task_data = self._prepare_task_data(task_id)
-                    break
-                except:
-                    time.sleep(0.1)
-            if task_data:
-                result['tasks'].append(task_data)
+            result['tasks'].append(task_id)
         return response.send_response(start_response, 200, json.dumps(result))
 
     def create_new_task(self, environ, start_response):
