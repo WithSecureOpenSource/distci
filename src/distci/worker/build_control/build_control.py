@@ -67,6 +67,8 @@ class BuildControlWorker(worker_base.WorkerBase):
             capabilities = [ 'git_checkout_v1' ]
         elif subtask_config['type'] == 'execute-shell':
             capabilities = [ 'execute_shell_v1' ]
+            for label in subtask_config['params'].get('nodelabels', []):
+                capabilities.append('nodelabel_%s' % label)
         elif subtask_config['type'] == 'publish-artifacts':
             capabilities = [ 'publish_artifacts_v1' ]
         else:

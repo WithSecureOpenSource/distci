@@ -18,6 +18,8 @@ class ExecuteShellWorker(worker_base.WorkerBase):
     def __init__(self, config):
         worker_base.WorkerBase.__init__(self, config)
         self.worker_config['capabilities'] = ['execute_shell_v1']
+        for label in config.get('labels', []):
+            self.worker_config['capabilities'].append('nodelabel_%s' % label)
         self.distci_client = distcilib.DistCIClient(config)
 
     def send_failure(self, task, error):
