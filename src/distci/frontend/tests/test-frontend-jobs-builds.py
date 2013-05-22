@@ -68,10 +68,10 @@ class TestJobsBuilds:
     def test_00_setup(self):
         test_job_data_file = os.path.join(os.path.dirname(__file__), 'test-frontend-jobs-builds_job-config.json')
         test_job_data = json.load(file(test_job_data_file, 'rb'))
-        request = TestRequest.blank('/jobs', content_type='application/json')
-        request.method = 'POST'
+        request = TestRequest.blank('/jobs/%s' % str(test_job_data['job_id']), content_type='application/json')
+        request.method = 'PUT'
         request.body = json.dumps(test_job_data)
-        response = self.app.do_request(request, 201, False)
+        response = self.app.do_request(request, 200, False)
         result = json.loads(response.body)
         assert result.has_key('job_id'), "ID entry went missing"
         assert result.has_key('config'), "config entry went missing"

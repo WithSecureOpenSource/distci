@@ -76,7 +76,7 @@ class Jobs(object):
         else:
             lock = None
 
-        if job_id_param is None:
+        if not os.path.isdir(self._job_dir(job_id)):
             try:
                 os.mkdir(self._job_dir(job_id))
             except OSError:
@@ -137,8 +137,6 @@ class Jobs(object):
         if len(parts) == 0:
             if method == 'GET':
                 return self.get_jobs(start_response)
-            elif method == 'POST':
-                return self.create_or_update_job(environ, start_response)
             else:
                 return response.send_error(start_response, 400)
         elif len(parts) == 1:
