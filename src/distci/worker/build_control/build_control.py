@@ -61,8 +61,8 @@ class BuildControlWorker(worker_base.WorkerBase):
             self.log.error('Failed to store empty workspace')
             self.delete_workspace(tmp_dir)
 
-    def spawn_subtask(self, task_key, subtask_key):
-        subtask_config = self.build_states[task_key]['job_config']['tasks'][subtask_key]
+    def spawn_subtask(self, task_key, subtask_index):
+        subtask_config = self.build_states[task_key]['job_config']['tasks'][subtask_index]
         if subtask_config['type'] == 'git-checkout':
             capabilities = [ 'git_checkout_v1' ]
         elif subtask_config['type'] == 'execute-shell':
@@ -72,52 +72,48 @@ class BuildControlWorker(worker_base.WorkerBase):
         elif subtask_config['type'] == 'publish-artifacts':
             capabilities = [ 'publish_artifacts_v1' ]
         else:
-            self.build_states[task_key]['build_state']['tasks'][subtask_key] = {
+            self.build_states[task_key]['build_state']['tasks'].append({
                 'status': 'complete',
                 'result': 'error',
-                'error_message': 'Unknown subtask type %s' % subtask_config['type'] }
+                'error_message': 'Unknown subtask type %s' % subtask_config['type'] })
             return
 
-        # spawn new task
-        task_descr = self.build_states[task_key]['build_state']['tasks'].get(subtask_key)
-        if task_descr is None:
-            task_descr = { 'status': 'pending',
-                          'job_id': self.build_states[task_key]['job_id'],
-                          'build_number': self.build_states[task_key]['build_number'],
-                          'capabilities': capabilities,
-                          'params': copy.deepcopy(self.build_states[task_key]['job_config']['tasks'][subtask_key]['params']) }
+        task_descr = { 'status': 'pending',
+                       'job_id': self.build_states[task_key]['job_id'],
+                       'build_number': self.build_states[task_key]['build_number'],
+                       'capabilities': capabilities,
+                       'params': copy.deepcopy(self.build_states[task_key]['job_config']['tasks'][subtask_index]['params']) }
 
-        task_obj = task_base.GenericTask(task_descr, task_descr.get('id'))
-        if task_obj.id is None:
-            task_obj = self.post_new_task(task_obj)
-            if task_obj is None:
-                self.log.error('Failed to post new task for job %s build %s', self.build_states[task_key]['job_id'], self.build_states[task_key]['build_number'])
-                return
+        task_obj = task_base.GenericTask(task_descr, None)
+        task_obj = self.post_new_task(task_obj)
+        if task_obj is None:
+            self.log.error('Failed to post new task for job %s build %s', self.build_states[task_key]['job_id'], self.build_states[task_key]['build_number'])
+            return
 
-            self.build_states[task_key]['build_state']['tasks'][subtask_key] = task_obj.config
-            self.build_states[task_key]['build_state']['tasks'][subtask_key]['id'] = task_obj.id
+        self.build_states[task_key]['build_state']['tasks'][subtask_index] = task_obj.config
+        self.build_states[task_key]['build_state']['tasks'][subtask_index]['id'] = task_obj.id
 
         if self.update_build_state(task_key) == False:
             return
 
-    def update_state_after_subtask_completion(self, task_key, subtask_key):
-        artifacts = self.build_states[task_key]['build_state']['tasks'][subtask_key].get('artifacts')
+    def update_state_after_subtask_completion(self, task_key, subtask_index):
+        artifacts = self.build_states[task_key]['build_state']['tasks'][subtask_index].get('artifacts')
         if artifacts is not None:
             for path, artifact_id in artifacts.iteritems():
                 self.build_states[task_key]['build_state']['artifacts'][path] = artifact_id
 
     def check_status_and_issue_tasks(self, task_key):
         self.log.debug('Checking status for %s', task_key)
-        subtask_keys = sorted(self.build_states[task_key]['job_config']['tasks'].keys(), key=int)
-        for subtask_key in subtask_keys:
-            subtask_desc = self.build_states[task_key]['build_state']['tasks'].get(subtask_key)
+        for subtask_index in range(len(self.build_states[task_key]['job_config']['tasks'])):
+            subtask_desc = self.build_states[task_key]['build_state']['tasks'].get(subtask_index)
             if subtask_desc is None:
-                self.spawn_subtask(task_key, subtask_key)
-                subtask_desc = self.build_states[task_key]['build_state']['tasks'].get(subtask_key)
+                if self.spawn_subtask(task_key, subtask_index) == False:
+                    return
+            subtask_desc = self.build_states[task_key]['build_state']['tasks'][subtask_index]
             if subtask_desc['status'] != 'complete':
                 subtask = self.get_task(subtask_desc['id'])
                 if subtask is not None:
-                    self.build_states[task_key]['build_state']['tasks'][subtask_key].update(subtask.config)
+                    self.build_states[task_key]['build_state']['tasks'][subtask_index].update(subtask.config)
             if subtask_desc['status'] != 'complete':
                 return
             if subtask_desc['result'] != 'success':
@@ -125,7 +121,7 @@ class BuildControlWorker(worker_base.WorkerBase):
                 self.build_states[task_key]['build_state']['status'] = 'complete'
                 self.build_states[task_key]['build_state']['result'] = 'failure'
                 return
-            self.update_state_after_subtask_completion(task_key, subtask_key)
+            self.update_state_after_subtask_completion(task_key, subtask_index)
         self.build_states[task_key]['state'] = 'complete'
         self.build_states[task_key]['build_state']['status'] = 'complete'
         self.build_states[task_key]['build_state']['result'] = 'success'
