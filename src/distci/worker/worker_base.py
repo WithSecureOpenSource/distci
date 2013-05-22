@@ -28,31 +28,36 @@ class WorkerBase(object):
     def fetch_task(self, timeout=None):
         start_timestamp = time.time()
         while True:
-            tasks = self.distci_client.tasks.list()
+            tasks = self.list_tasks()
             if tasks is not None:
                 random.shuffle(tasks['tasks'])
                 for task_id in tasks['tasks']:
                     self.log.debug('Task: %r', task_id)
-                    task_data = self.distci_client.tasks.get(task_id)
-                    if task_data is not None:
-                        task = task_base.GenericTask(task_data, task_id)
-                        if task is None or task.config.get('assignee') is not None or task.config.get('status') != 'pending':
-                            self.log.debug('Task %s is not for up to grabs' % task_id)
-                            continue
-                        if not set(task.config['capabilities']).issubset(set(self.worker_config['capabilities'])):
-                            self.log.debug("Task %s doesn't match our capabilities", task_id)
-                            continue
-                        task.config['assignee'] = self.uuid
-                        task.config['status'] = 'running'
-                        if self.update_task(task):
-                            return task
-                        else:
-                            self.log.debug("Failed to claim the task '%s'" % task_id)
+                    task = self.get_task(task_id)
+                    if task is None or task.config.get('assignee') is not None or task.config.get('status') != 'pending':
+                        self.log.debug('Task %s is not for up to grabs' % task_id)
+                        continue
+                    if not set(task.config['capabilities']).issubset(set(self.worker_config['capabilities'])):
+                        self.log.debug("Task %s doesn't match our capabilities", task_id)
+                        continue
+                    task.config['assignee'] = self.uuid
+                    task.config['status'] = 'running'
+                    if self.update_task(task):
+                        return task
+                    else:
+                        self.log.debug("Failed to claim the task '%s'" % task_id)
             if timeout is not None:
                 if time.time() < start_timestamp + timeout:
                     time.sleep(self.worker_config.get('poll_interval', 10))
                 else:
                     break
+        return None
+
+    def list_tasks(self):
+        for _ in range(self.worker_config.get('retry_count', 10)):
+            tasks = self.distci_client.tasks.list()
+            if tasks is not None:
+                return tasks
         return None
 
     def get_task(self, task_id):
