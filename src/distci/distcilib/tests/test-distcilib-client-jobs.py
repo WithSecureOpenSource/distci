@@ -64,7 +64,7 @@ class TestDistcilibClientTasks:
 
     def test_01_create_job(self):
         job_config = { 'job_id': 'testjob', 'testkey': 'testvalue' }
-        job = self.client.jobs.create(job_config)
+        job = self.client.jobs.set(job_config['job_id'], job_config)
         assert job is not None, "Empty result for job creation"
         assert job.has_key('job_id'), "Missing job_id key in job reply"
         assert job['job_id'] == job_config['job_id'], "JobID mismatch"
@@ -92,7 +92,7 @@ class TestDistcilibClientTasks:
 
     def test_04_update_job(self):
         job_config = { 'job_id': 'testjob', 'testkey': 'testvalue_modified' }
-        job = self.client.jobs.update(job_config['job_id'], job_config)
+        job = self.client.jobs.set(job_config['job_id'], job_config)
         assert job is not None, "Empty result for job update"
         assert job.has_key('job_id'), "Missing job_id key in job reply"
         assert job['job_id'] == self.state['job_id'], "JobID mismatch"

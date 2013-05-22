@@ -42,12 +42,12 @@ class TestJobs:
         assert result.has_key('jobs'), "Jobs entry went missing"
         assert len(result['jobs']) == 0, "Jobs entry was not empty"
 
-    def test_02_post_job(self):
+    def test_02_create_job(self):
         job_data = json.dumps({ 'build_tasks': ['something'], 'job_id': 'test_job' })
-        request = TestRequest.blank('/jobs', content_type='application/json')
-        request.method = 'POST'
+        request = TestRequest.blank('/jobs/test_job', content_type='application/json')
+        request.method = 'PUT'
         request.body = job_data
-        response = self.app.do_request(request, 201, False)
+        response = self.app.do_request(request, 200, False)
         result = json.loads(response.body)
         assert result.has_key('job_id'), "ID entry went missing"
         assert result.has_key('config'), "config entry went missing"
