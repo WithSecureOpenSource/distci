@@ -139,10 +139,24 @@ class BuildControlWorker(worker_base.WorkerBase):
         if self.update_build_state(task_key) == False:
             return
 
+        # clean up subtasks
+        for _, subtask_data in self.build_states[task_key]['build_state']['tasks'].iteritems():
+            if subtask_data['id'] is not None:
+                for _ in range(self.worker_config.get('retry_count', 10)):
+                    if self.distci_client.tasks.delete(subtask_data['id']) == True:
+                        subtask_data['id'] = None
+                        break
+            if subtask_data['id'] is not None:
+                return
+
+        # delete our main task
         task = self.build_states[task_key]['task']
-        task.config['status'] = 'complete'
-        del task.config['assignee']
-        self.update_task(task)
+        for _ in range(self.worker_config.get('retry_count', 10)):
+            if self.distci_client.tasks.delete(task.id) == True:
+                task.id = None
+                break
+        if task.id is not None:
+            return
 
         self.build_states[task_key]['state'] = 'reported'
 
