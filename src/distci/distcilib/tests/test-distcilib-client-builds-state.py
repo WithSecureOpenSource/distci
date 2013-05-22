@@ -63,7 +63,7 @@ class TestDistcilibClientTasks:
 
     def test_00_setup(self):
         job_config = { 'job_id': 'testjob' }
-        job = self.client.jobs.create(job_config)
+        job = self.client.jobs.set(job_config['job_id'], job_config)
         assert job is not None, "Empty result for job creation"
         self.state['job_id'] = job['job_id']
 
