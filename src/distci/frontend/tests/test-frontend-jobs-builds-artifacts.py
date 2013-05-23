@@ -70,7 +70,11 @@ class TestJobsBuildArtifacts:
         response = self.app.request('/jobs/%s/builds/%s/artifacts/%s' % (self.test_state['job_id'], self.test_state['build_number'], self.test_state['artifact_id']))
         assert response.body == 'test_content', "Wrong data"
 
-    def test_03_update_artifact(self):
+    def test_03_get_artifact_alternate(self):
+        response = self.app.request('/jobs/%s/builds/%s/artifacts/%s/test_data.txt' % (self.test_state['job_id'], self.test_state['build_number'], self.test_state['artifact_id']))
+        assert response.body == 'test_content', "Wrong data"
+
+    def test_04_update_artifact(self):
         request = TestRequest.blank('/jobs/%s/builds/%s/artifacts/%s' % (self.test_state['job_id'], self.test_state['build_number'], self.test_state['artifact_id']), content_type='application/octet-stream')
         request.method = 'PUT'
         request.body = 'test_content_modified'
@@ -84,7 +88,7 @@ class TestJobsBuildArtifacts:
         response = self.app.request('/jobs/%s/builds/%s/artifacts/%s' % (self.test_state['job_id'], self.test_state['build_number'], self.test_state['artifact_id']))
         assert response.body == 'test_content_modified', "Wrong data"
 
-    def test_04_delete_artifact(self):
+    def test_05_delete_artifact(self):
         request = TestRequest.blank('/jobs/%s/builds/%s/artifacts/%s' % (self.test_state['job_id'], self.test_state['build_number'], self.test_state['artifact_id']), content_type='application/octet-stream')
         request.method = 'DELETE'
         _ = self.app.do_request(request, 204, False)

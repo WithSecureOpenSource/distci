@@ -313,7 +313,9 @@ class JobsBuilds(object):
             else:
                 return response.send_error(start_response, 400)
         elif len(parts) == 1:
-            if method == 'DELETE':
+            if method == 'GET':
+                return self.get_build_state(start_response, job_id, parts[0])
+            elif method == 'DELETE':
                 return self.delete_build(start_response, job_id, parts[0])
             else:
                 return response.send_error(start_response, 400)

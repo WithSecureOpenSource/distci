@@ -99,8 +99,8 @@ class BuildControlWorker(worker_base.WorkerBase):
     def update_state_after_subtask_completion(self, task_key, subtask_index):
         artifacts = self.build_states[task_key]['build_state']['tasks'][subtask_index].get('artifacts')
         if artifacts is not None:
-            for path, artifact_id in artifacts.iteritems():
-                self.build_states[task_key]['build_state']['artifacts'][path] = artifact_id
+            for artifact_id, path in artifacts.iteritems():
+                self.build_states[task_key]['build_state']['artifacts'][artifact_id] = path
 
     def check_status_and_issue_tasks(self, task_key):
         self.log.debug('Checking status for %s', task_key)

@@ -72,7 +72,12 @@ class PublishArtifactsWorker(worker_base.WorkerBase):
                             fh.close()
                             if artifact_reply is not None and artifact_reply.get('artifact_id') is not None:
                                 log = '%s\nStored \'%s\' as artifact \'%s\'' % (log, rel_artifact, artifact_reply.get('artifact_id'))
-                                task.config['artifacts'][rel_artifact] = artifact_reply.get('artifact_id')
+                                filename_parts = []
+                                tail = rel_artifact
+                                while tail != '':
+                                    (tail, head) = os.path.split(tail)
+                                    filename_parts.insert(0, head)
+                                task.config['artifacts'][artifact_reply.get('artifact_id')] = filename_parts
                                 break
                         if artifact_reply is None:
                             log = '%s\nFailed to store artifact \'%s\'' % (log, rel_artifact)
