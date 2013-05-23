@@ -124,6 +124,11 @@ class JobsBuildsArtifacts(object):
                 return self.delete_artifact(start_response, job_id, build_id, parts[0])
             else:
                 return response.send_error(start_response, 400)
+        elif len(parts) == 2:
+            if method == 'GET':
+                return self.get_artifact(environ, start_response, job_id, build_id, parts[0])
+            else:
+                return response.send_error(start_response, 400)
 
         return response.send_response(start_response, 400)
 
