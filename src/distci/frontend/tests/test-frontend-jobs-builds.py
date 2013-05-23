@@ -15,7 +15,7 @@ import threading
 import urllib2
 import wsgiref.simple_server
 
-from distci.frontend import frontend
+from distci import frontend
 
 class BackgroundHttpServer:
     def __init__(self, server):
@@ -37,11 +37,12 @@ class TestJobsBuilds:
 
     @classmethod
     def route_request(cls, environ, start_request):
-        return cls.frontend_app.handle_request(environ, start_request)
+        return cls.frontend_app(environ, start_request)
 
     @classmethod
     def setUpClass(cls):
         cls.data_directory = tempfile.mkdtemp()
+        config_file = os.path.join(cls.data_directory, 'frontend.conf')
         os.mkdir(os.path.join(cls.data_directory, 'jobs'))
         os.mkdir(os.path.join(cls.data_directory, 'tasks'))
 
@@ -50,9 +51,10 @@ class TestJobsBuilds:
 
         config = { "data_directory": cls.data_directory,
                    "task_frontends": [ 'http://localhost:%d/' % cls.server_port ] }
+        json.dump(config, file(config_file, 'wb'))
 
         cls.frontend_app = frontend.Frontend(config)
-        cls.app = TestApp(cls.frontend_app.handle_request)
+        cls.app = TestApp(cls.frontend_app)
 
         cls.slave = BackgroundHttpServer(cls.server)
         cls.slave_thread = threading.Thread(target=cls.slave.serve)

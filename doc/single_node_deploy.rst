@@ -25,7 +25,7 @@ Single node deployment
 
 1.2.1. Install dependencies::
 
-    $ sudo apt-get install python-setuptools python-zookeeper python-flup nginx supervisor
+    $ sudo apt-get install python-setuptools python-zookeeper gunicorn nginx supervisor
 
 1.2.2. Install DistCI::
 
@@ -43,23 +43,22 @@ Single node deployment
 
 1.2.5. Drop in DistCI NGINX configuration at ``/etc/nginx/sites-available/distci-frontend``. Create symbolic link to the same file under ``/etc/nginx/sites-enabled/``. You may need to disable the default NGINX configuration. Restart/reload NGINX after configuration change::
 
-    upstream distci_frontend {
-        server unix:/var/run/distci-frontend.socket;
-    }
-
     server {
         location /distci/ {
-            include         fastcgi_params;
-            fastcgi_split_path_info ^(/distci)(/.*)$;
-            fastcgi_param   PATH_INFO       $fastcgi_path_info;
-            fastcgi_pass    distci_frontend;
+            rewrite         /distci/(.*) /$1 break;
+            proxy_pass      http://127.0.0.1:8000;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         }
     }
 
 1.2.6. Drop in DistCI frontend supervisor config at ``/etc/supervisor/conf.d/distci-frontend.conf``::
 
     [program:distci-frontend]
-    command=/usr/local/bin/distci-frontend -c /etc/distci/frontend.conf
+    command=/usr/bin/gunicorn -w 4 'distci.frontend:build_frontend_app("/etc/distci/frontend.conf")'
+    autostart=true
+    autorestart=true
 
 1.2.7. Reload supervisor::
 

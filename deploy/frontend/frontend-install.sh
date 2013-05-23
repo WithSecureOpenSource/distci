@@ -22,7 +22,7 @@ fi
 mkdir -p /mnt/data/distci/tasks
 mkdir -p /mnt/data/distci/jobs
 
-apt-get -y install python-setuptools python-flup nginx python-zookeeper supervisor
+apt-get -y install python-setuptools gunicorn nginx python-zookeeper supervisor
 easy_install /root/deploy/frontend/eggs/distci-*.egg
 
 /etc/init.d/nginx stop
