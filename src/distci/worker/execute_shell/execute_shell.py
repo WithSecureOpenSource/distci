@@ -62,9 +62,9 @@ class ExecuteShellWorker(worker_base.WorkerBase):
             # 2. create temporary script
             (script_handle, script_name) = tempfile.mkstemp()
             os.close(script_handle)
-            fh = open(script_name, 'wb')
-            fh.write(task.config['params']['script'])
-            fh.close()
+            fileh = open(script_name, 'wb')
+            fileh.write(task.config['params']['script'])
+            fileh.close()
 
             # 3. run the script
             if task.config['params'].get('working_directory'):
@@ -73,7 +73,11 @@ class ExecuteShellWorker(worker_base.WorkerBase):
                 wdir = workspace
 
             cmd_and_args = [ "sh", script_name ]
-            proc = subprocess.Popen(cmd_and_args, cwd=wdir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            env = os.environ.copy()
+            env['JOB_NAME'] = task.config['job_id']
+            env['BUILD_NUMBER'] = task.config['build_number']
+            env['WORKSPACE'] = workspace
+            proc = subprocess.Popen(cmd_and_args, cwd=wdir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
             (output, _) = proc.communicate()
 
             log = '%s%s' % (log, output)
