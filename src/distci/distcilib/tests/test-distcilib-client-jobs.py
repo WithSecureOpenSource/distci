@@ -11,8 +11,9 @@ import shutil
 import threading
 import urllib2
 import wsgiref.simple_server
+import json
 
-from distci.frontend import frontend
+from distci import frontend
 
 from distci import distcilib
 
@@ -36,14 +37,16 @@ class TestDistcilibClientTasks:
     @classmethod
     def setUpClass(cls):
         cls.data_directory = tempfile.mkdtemp()
+        frontend_config_file = os.path.join(cls.data_directory, 'frontend.conf')
         os.mkdir(os.path.join(cls.data_directory, 'tasks'))
         os.mkdir(os.path.join(cls.data_directory, 'jobs'))
 
         frontend_config = { "data_directory": cls.data_directory }
+        json.dump(frontend_config, file(frontend_config_file, 'wb'))
 
         cls.frontend_app = frontend.Frontend(frontend_config)
 
-        cls.server = wsgiref.simple_server.make_server('localhost', 0, cls.frontend_app.handle_request, handler_class=SilentWSGIRequestHandler)
+        cls.server = wsgiref.simple_server.make_server('localhost', 0, cls.frontend_app, handler_class=SilentWSGIRequestHandler)
         cls.server_port = cls.server.socket.getsockname()[1]
 
         cls.slave = BackgroundHttpServer(cls.server)
