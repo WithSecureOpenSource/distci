@@ -11,6 +11,7 @@ import shutil
 import threading
 import urllib2
 import wsgiref.simple_server
+import json
 
 from distci import frontend
 from distci.worker import worker_base
@@ -36,13 +37,15 @@ class TestWorkerBase:
     @classmethod
     def setUpClass(cls):
         cls.data_directory = tempfile.mkdtemp()
+        frontend_config_file = os.path.join(cls.data_directory, 'frontend.conf')
         os.mkdir(os.path.join(cls.data_directory, 'tasks'))
 
         frontend_config = { "data_directory": cls.data_directory }
+        json.dump(frontend_config, file(frontend_config_file, 'wb'))
 
         cls.frontend_app = frontend.Frontend(frontend_config)
 
-        cls.server = wsgiref.simple_server.make_server('localhost', 8800, cls.frontend_app.handle_request, handler_class=SilentWSGIRequestHandler)
+        cls.server = wsgiref.simple_server.make_server('localhost', 8800, cls.frontend_app, handler_class=SilentWSGIRequestHandler)
 
         cls.slave = BackgroundHttpServer(cls.server)
         cls.slave_thread = threading.Thread(target=cls.slave.serve)

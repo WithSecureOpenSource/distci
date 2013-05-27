@@ -12,7 +12,7 @@ import tempfile
 import os
 import shutil
 
-from distci.frontend import frontend
+from distci import frontend
 
 class TestTasks:
     app = None
@@ -24,12 +24,14 @@ class TestTasks:
     def setUpClass(cls):
         cls.data_directory = '/Users/noushe/CI-proto'
         cls.data_directory = tempfile.mkdtemp()
+        config_file = os.path.join(cls.data_directory, 'frontend.conf')
         os.mkdir(os.path.join(cls.data_directory, 'tasks'))
 
         config = { "data_directory": cls.data_directory }
+        json.dump(config, file(config_file, 'wb'))
 
         frontend_app = frontend.Frontend(config)
-        cls.app = TestApp(frontend_app.handle_request)
+        cls.app = TestApp(frontend_app)
 
     @classmethod
     def tearDownClass(cls):

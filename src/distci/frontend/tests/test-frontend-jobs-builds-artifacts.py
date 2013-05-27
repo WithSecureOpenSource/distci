@@ -12,7 +12,7 @@ import tempfile
 import os
 import shutil
 
-from distci.frontend import frontend
+from distci import frontend
 
 class TestJobsBuildArtifacts:
     app = None
@@ -23,12 +23,15 @@ class TestJobsBuildArtifacts:
     @classmethod
     def setUpClass(cls):
         cls.data_directory = tempfile.mkdtemp()
+        config_file = os.path.join(cls.data_directory, 'frontend.conf')
+
         os.mkdir(os.path.join(cls.data_directory, 'jobs'))
 
         config = { "data_directory": cls.data_directory }
+        json.dump(config, file(config_file, 'wb'))
 
         cls.frontend_app = frontend.Frontend(config)
-        cls.app = TestApp(cls.frontend_app.handle_request)
+        cls.app = TestApp(cls.frontend_app)
 
     @classmethod
     def tearDownClass(cls):
