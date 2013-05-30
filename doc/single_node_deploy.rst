@@ -44,6 +44,10 @@ Single node deployment
 1.2.5. Drop in DistCI NGINX configuration at ``/etc/nginx/sites-available/distci-frontend``. Create symbolic link to the same file under ``/etc/nginx/sites-enabled/``. You may need to disable the default NGINX configuration. Restart/reload NGINX after configuration change::
 
     server {
+        location = /distci/ {
+                return 301 /distci/ui/;
+        }
+
         location /distci/ {
             rewrite         /distci/(.*) /$1 break;
             proxy_pass      http://127.0.0.1:8000;

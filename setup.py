@@ -24,6 +24,17 @@ setup(
     },
     author = 'Heikki Nousiainen',
     author_email = 'Heikki.Nousiainen@F-Secure.com',
-    url = 'http://github.com/F-Secure/distci'
+    url = 'http://github.com/F-Secure/distci',
+    data_files = [('distci/frontend/ui',
+                      ['src/ui/index.html']),
+                  ('distci/frontend/ui/js',
+                      ['src/ui/js/app.js',
+                       'src/ui/js/controllers.js']),
+                  ('distci/frontend/ui/html',
+                      ['src/ui/html/jobbuildstate.html',
+                       'src/ui/html/jobbuilds.html',
+                       'src/ui/html/jobs.html']),
+                  ('distci/frontend/ui/css',
+                      ['src/ui/css/app.css'])]
 )
 
