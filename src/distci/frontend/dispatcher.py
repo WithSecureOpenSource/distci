@@ -5,7 +5,7 @@ Copyright (c) 2012-2013 Heikki Nousiainen, F-Secure
 See LICENSE for details
 """
 
-from distci.frontend import response, jobs, tasks
+from distci.frontend import response, jobs, tasks, ui
 import logging
 
 class Dispatcher(object):
@@ -14,6 +14,7 @@ class Dispatcher(object):
         self.log = logging.getLogger('dispatcher')
         self.tasks = tasks.Tasks(config)
         self.jobs = jobs.Jobs(config)
+        self.ui = ui.Ui(config)
 
     def handle_request(self, environ, start_response):
         """ Parse top level request for dispatching """
@@ -33,6 +34,8 @@ class Dispatcher(object):
             return self.jobs.handle_request(environ, start_response, method, parts[1:])
         elif parts[0] == 'tasks':
             return self.tasks.handle_request(environ, start_response, method, parts[1:])
+        elif parts[0] == 'ui':
+            return self.ui.handle_request(environ, start_response, method, parts[1:])
         elif parts[0] == '':
             return response.send_response(start_response, 204)
 

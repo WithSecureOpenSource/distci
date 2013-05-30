@@ -1,0 +1,7 @@
+<p>{{jobid}}</p>
+<button ng-click="trigger()">Build now</button>
+<ul class="builds">
+  <li ng-repeat="build in builds">
+    <a href="#/jobs/{{jobid}}/builds/{{build}}">{{build}}</a>
+  </li>
+</ul>
