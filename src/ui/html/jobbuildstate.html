@@ -1,0 +1,11 @@
+<p>{{jobid}}</p>
+Build number: {{build}}<br/>
+Status: {{state.status}}<br/>
+Result: {{state.result}}<br/>
+Artifacts:
+<ul class="artifacts">
+  <li ng-repeat="artifact in artifacts">
+    <a href="/distci/jobs/{{jobid}}/builds/{{build}}/artifacts/{{artifact.id}}/{{artifact.filename}}">{{artifact.fullname}}</a>
+  </li>
+</ul>
+<a href="/distci/jobs/{{jobid}}/builds/{{build}}/console">Console log</a>
