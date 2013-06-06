@@ -42,6 +42,8 @@ class ExecuteShellWorker(worker_base.WorkerBase):
 
         self.state['script_name'] = script_name
 
+        self.state['start_timestamp'] = time.time()
+
         # execute
         if self.state['task'].config['params'].get('working_directory'):
             wdir = os.path.join(self.state['workspace'], self.state['task'].config['params']['working_directory'])
@@ -53,7 +55,7 @@ class ExecuteShellWorker(worker_base.WorkerBase):
         env['JOB_NAME'] = self.state['task'].config['job_id']
         env['BUILD_NUMBER'] = self.state['task'].config['build_number']
         env['WORKSPACE'] = self.state['workspace']
-        self.state['proc'] = subprocess.Popen(cmd_and_args, cwd=wdir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
+        self.state['proc'] = subprocess.Popen(cmd_and_args, cwd=wdir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, preexec_fn=os.setpgrp)
 
         outfd = self.state['proc'].stdout.fileno()
         flags = fcntl.fcntl(outfd, fcntl.F_GETFL)
@@ -71,6 +73,34 @@ class ExecuteShellWorker(worker_base.WorkerBase):
             else:
                 return False
         return True
+
+    def watch_process(self):
+        """ check output and status of a running background process """
+        retcode = self.state['proc'].poll()
+        try:
+            output = self.state['proc'].stdout.read()
+            self.state['log'] = '%s%s' % (self.state['log'], output)
+        except IOError:
+            pass
+        self.push_console_log()
+        if retcode is not None:
+            if retcode == 0:
+                self.state['task'].config['result'] = 'success'
+            else:
+                self.state['task'].config['result'] = 'failure'
+                self.state['task'].config['error'] = 'Executed script reported failure, exitcode %d' % retcode
+            return True
+
+        timeout = self.state['task'].config['params'].get('timeout')
+        if timeout:
+            ttl = self.state['start_timestamp'] + timeout - time.time()
+            if ttl < -60.0:
+                self.state['log'] = '%s\nTimed out, killing process...' % self.state['log']
+                self.state['proc'].kill()
+            elif ttl < 0.0:
+                self.state['log'] = '%s\nTimed out, terminating...' % self.state['log']
+                self.state['proc'].terminate()
+        return False
 
     def report_result(self):
         """ push all remaining artifacts back to repository """
@@ -101,22 +131,8 @@ class ExecuteShellWorker(worker_base.WorkerBase):
         elif self.state['state'] == 'start' and self.start_script():
             self.state['state'] = 'running'
             return True
-        elif self.state['state'] == 'running':
-            retcode = self.state['proc'].poll()
-            try:
-                output = self.state['proc'].stdout.read()
-                self.state['log'] = '%s%s' % (self.state['log'], output)
-            except IOError:
-                pass
-            self.push_console_log()
-            if retcode is not None:
-                self.state['state'] = 'reporting'
-                if retcode == 0:
-                    self.state['task'].config['result'] = 'success'
-                else:
-                    self.state['task'].config['result'] = 'failure'
-                    self.state['task'].config['error'] = 'Executed script reported failure, exitcode %d' % retcode
-                return True
+        elif self.state['state'] == 'running' and self.watch_process():
+            self.state['state'] = 'reporting'
         elif self.state['state'] == 'reporting' and self.report_result():
             self.state['state'] = 'complete'
             self.state['task'].config['status'] = 'complete'
