@@ -39,6 +39,8 @@ class ExecuteShellWorker(worker_base.WorkerBase):
         fileh.write(self.state['task'].config['params']['script'])
         fileh.close()
 
+        self.state['script_name'] = script_name
+
         # execute
         if self.state['task'].config['params'].get('working_directory'):
             wdir = os.path.join(self.state['workspace'], self.state['task'].config['params']['working_directory'])
@@ -52,7 +54,6 @@ class ExecuteShellWorker(worker_base.WorkerBase):
         env['WORKSPACE'] = self.state['workspace']
         self.state['proc'] = subprocess.Popen(cmd_and_args, cwd=wdir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
 
-        os.unlink(script_name)
         return True
 
     def push_console_log(self):
@@ -68,6 +69,11 @@ class ExecuteShellWorker(worker_base.WorkerBase):
 
     def report_result(self):
         """ push all remaining artifacts back to repository """
+        # delete temporary script
+        if self.state.get('script_name') is not None and os.path.isfile(self.state['script_name']):
+            os.unlink(self.state['script_name'])
+            self.state['script_name'] = None
+
         # flush console log
         if self.push_console_log() == False:
             return False
@@ -100,7 +106,7 @@ class ExecuteShellWorker(worker_base.WorkerBase):
                     self.state['task'].config['result'] = 'success'
                 else:
                     self.state['task'].config['result'] = 'failure'
-                    self.state['task'].config['error'] = 'Executed script reported failure'
+                    self.state['task'].config['error'] = 'Executed script reported failure, exitcode %d' % retcode
                 return True
         elif self.state['state'] == 'reporting' and self.report_result():
             self.state['state'] = 'complete'
