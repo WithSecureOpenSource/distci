@@ -9,6 +9,7 @@ import subprocess
 import os
 import tempfile
 import time
+import fcntl
 
 from distci.worker import worker_base
 from distci import distcilib
@@ -39,6 +40,10 @@ class ExecuteShellWorker(worker_base.WorkerBase):
         fileh.write(self.state['task'].config['params']['script'])
         fileh.close()
 
+        self.state['script_name'] = script_name
+
+        self.state['start_timestamp'] = time.time()
+
         # execute
         if self.state['task'].config['params'].get('working_directory'):
             wdir = os.path.join(self.state['workspace'], self.state['task'].config['params']['working_directory'])
@@ -50,9 +55,12 @@ class ExecuteShellWorker(worker_base.WorkerBase):
         env['JOB_NAME'] = self.state['task'].config['job_id']
         env['BUILD_NUMBER'] = self.state['task'].config['build_number']
         env['WORKSPACE'] = self.state['workspace']
-        self.state['proc'] = subprocess.Popen(cmd_and_args, cwd=wdir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
+        self.state['proc'] = subprocess.Popen(cmd_and_args, cwd=wdir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, preexec_fn=os.setpgrp)
 
-        os.unlink(script_name)
+        outfd = self.state['proc'].stdout.fileno()
+        flags = fcntl.fcntl(outfd, fcntl.F_GETFL)
+        fcntl.fcntl(outfd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+
         return True
 
     def push_console_log(self):
@@ -66,8 +74,41 @@ class ExecuteShellWorker(worker_base.WorkerBase):
                 return False
         return True
 
+    def watch_process(self):
+        """ check output and status of a running background process """
+        retcode = self.state['proc'].poll()
+        try:
+            output = self.state['proc'].stdout.read()
+            self.state['log'] = '%s%s' % (self.state['log'], output)
+        except IOError:
+            pass
+        self.push_console_log()
+        if retcode is not None:
+            if retcode == 0:
+                self.state['task'].config['result'] = 'success'
+            else:
+                self.state['task'].config['result'] = 'failure'
+                self.state['task'].config['error'] = 'Executed script reported failure, exitcode %d' % retcode
+            return True
+
+        timeout = self.state['task'].config['params'].get('timeout')
+        if timeout:
+            ttl = self.state['start_timestamp'] + timeout - time.time()
+            if ttl < -60.0:
+                self.state['log'] = '%s\nTimed out, killing process...' % self.state['log']
+                self.state['proc'].kill()
+            elif ttl < 0.0:
+                self.state['log'] = '%s\nTimed out, terminating...' % self.state['log']
+                self.state['proc'].terminate()
+        return False
+
     def report_result(self):
         """ push all remaining artifacts back to repository """
+        # delete temporary script
+        if self.state.get('script_name') is not None and os.path.isfile(self.state['script_name']):
+            os.unlink(self.state['script_name'])
+            self.state['script_name'] = None
+
         # flush console log
         if self.push_console_log() == False:
             return False
@@ -82,6 +123,28 @@ class ExecuteShellWorker(worker_base.WorkerBase):
 
         return True
 
+    def perform_step(self):
+        """ perform single step in state machine """
+        if self.state['state'] == 'fetch-workspace' and self.get_workspace():
+            self.state['state'] = 'start'
+            return True
+        elif self.state['state'] == 'start' and self.start_script():
+            self.state['state'] = 'running'
+            return True
+        elif self.state['state'] == 'running' and self.watch_process():
+            self.state['state'] = 'reporting'
+        elif self.state['state'] == 'reporting' and self.report_result():
+            self.state['state'] = 'complete'
+            self.state['task'].config['status'] = 'complete'
+            return True
+        elif self.state['state'] == 'complete':
+            if self.state['task'].config.get('assignee'):
+                del self.state['task'].config['assignee']
+            if self.update_task(self.state['task']) is not None:
+                self.state['task'] = None
+                return True
+        return False
+
     def start(self):
         """ main loop """
         while True:
@@ -94,44 +157,12 @@ class ExecuteShellWorker(worker_base.WorkerBase):
                 self.state['state'] = 'fetch-workspace'
                 self.state['log'] = ''
 
-            if task.config['status'] == 'complete':
-                if task.config.get('assignee'):
-                    del task.config['assignee']
-                if self.update_task(task) is not None:
-                    self.state['task'] = None
-                continue
-
-            if not task.config.get('params') or not task.config['params'].get('script'):
-                self.state['state'] = 'complete'
-                task.config['status'] = 'complete'
-                task.config['result'] = 'failure'
-                task.config['error'] = 'Script not specified'
-                continue
-
-            if self.state['state'] == 'fetch-workspace':
-                if self.get_workspace():
-                    self.state['state'] = 'start'
-
-            if self.state['state'] == 'start':
-                if self.start_script() == True:
-                    self.state['state'] = 'running'
-
-            if self.state['state'] == 'running':
-                retcode = self.state['proc'].poll()
-                if retcode is not None:
-                    self.state['state'] = 'reporting'
-                    if retcode == 0:
-                        self.state['task'].config['result'] = 'success'
-                    else:
-                        self.state['task'].config['result'] = 'failure'
-                        self.state['task'].config['error'] = 'Executed script reported failure'
-                self.state['log'] = '%s%s' % (self.state['log'], self.state['proc'].stdout.read())
-                self.push_console_log()
-
-            if self.state['state'] == 'reporting':
-                if self.report_result() == True:
+                if not task.config.get('params') or not task.config['params'].get('script'):
                     self.state['state'] = 'complete'
-                    self.state['task'].config['status'] = 'complete'
+                    task.config['status'] = 'complete'
+                    task.config['result'] = 'failure'
+                    task.config['error'] = 'Script not specified'
 
-            time.sleep(1)
+            if self.perform_step() == False:
+                time.sleep(1)
 
