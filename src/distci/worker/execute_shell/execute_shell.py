@@ -9,6 +9,7 @@ import subprocess
 import os
 import tempfile
 import time
+import fcntl
 
 from distci.worker import worker_base
 from distci import distcilib
@@ -54,6 +55,10 @@ class ExecuteShellWorker(worker_base.WorkerBase):
         env['WORKSPACE'] = self.state['workspace']
         self.state['proc'] = subprocess.Popen(cmd_and_args, cwd=wdir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
 
+        outfd = self.state['proc'].stdout.fileno()
+        flags = fcntl.fcntl(outfd, fcntl.F_GETFL)
+        fcntl.fcntl(outfd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+
         return True
 
     def push_console_log(self):
@@ -98,7 +103,11 @@ class ExecuteShellWorker(worker_base.WorkerBase):
             return True
         elif self.state['state'] == 'running':
             retcode = self.state['proc'].poll()
-            self.state['log'] = '%s%s' % (self.state['log'], self.state['proc'].stdout.read())
+            try:
+                output = self.state['proc'].stdout.read()
+                self.state['log'] = '%s%s' % (self.state['log'], output)
+            except IOError:
+                pass
             self.push_console_log()
             if retcode is not None:
                 self.state['state'] = 'reporting'
@@ -139,5 +148,5 @@ class ExecuteShellWorker(worker_base.WorkerBase):
                     task.config['error'] = 'Script not specified'
 
             if self.perform_step() == False:
-                time.sleep(10)
+                time.sleep(1)
 
