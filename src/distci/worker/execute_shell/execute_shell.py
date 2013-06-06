@@ -82,6 +82,38 @@ class ExecuteShellWorker(worker_base.WorkerBase):
 
         return True
 
+    def perform_step(self):
+        """ perform single step in state machine """
+        if self.state['state'] == 'fetch-workspace' and self.get_workspace():
+            self.state['state'] = 'start'
+            return True
+        elif self.state['state'] == 'start' and self.start_script():
+            self.state['state'] = 'running'
+            return True
+        elif self.state['state'] == 'running':
+            retcode = self.state['proc'].poll()
+            self.state['log'] = '%s%s' % (self.state['log'], self.state['proc'].stdout.read())
+            self.push_console_log()
+            if retcode is not None:
+                self.state['state'] = 'reporting'
+                if retcode == 0:
+                    self.state['task'].config['result'] = 'success'
+                else:
+                    self.state['task'].config['result'] = 'failure'
+                    self.state['task'].config['error'] = 'Executed script reported failure'
+                return True
+        elif self.state['state'] == 'reporting' and self.report_result():
+            self.state['state'] = 'complete'
+            self.state['task'].config['status'] = 'complete'
+            return True
+        elif self.state['state'] == 'complete':
+            if self.state['task'].config.get('assignee'):
+                del self.state['task'].config['assignee']
+            if self.update_task(self.state['task']) is not None:
+                self.state['task'] = None
+                return True
+        return False
+
     def start(self):
         """ main loop """
         while True:
@@ -94,44 +126,12 @@ class ExecuteShellWorker(worker_base.WorkerBase):
                 self.state['state'] = 'fetch-workspace'
                 self.state['log'] = ''
 
-            if task.config['status'] == 'complete':
-                if task.config.get('assignee'):
-                    del task.config['assignee']
-                if self.update_task(task) is not None:
-                    self.state['task'] = None
-                continue
-
-            if not task.config.get('params') or not task.config['params'].get('script'):
-                self.state['state'] = 'complete'
-                task.config['status'] = 'complete'
-                task.config['result'] = 'failure'
-                task.config['error'] = 'Script not specified'
-                continue
-
-            if self.state['state'] == 'fetch-workspace':
-                if self.get_workspace():
-                    self.state['state'] = 'start'
-
-            if self.state['state'] == 'start':
-                if self.start_script() == True:
-                    self.state['state'] = 'running'
-
-            if self.state['state'] == 'running':
-                retcode = self.state['proc'].poll()
-                if retcode is not None:
-                    self.state['state'] = 'reporting'
-                    if retcode == 0:
-                        self.state['task'].config['result'] = 'success'
-                    else:
-                        self.state['task'].config['result'] = 'failure'
-                        self.state['task'].config['error'] = 'Executed script reported failure'
-                self.state['log'] = '%s%s' % (self.state['log'], self.state['proc'].stdout.read())
-                self.push_console_log()
-
-            if self.state['state'] == 'reporting':
-                if self.report_result() == True:
+                if not task.config.get('params') or not task.config['params'].get('script'):
                     self.state['state'] = 'complete'
-                    self.state['task'].config['status'] = 'complete'
+                    task.config['status'] = 'complete'
+                    task.config['result'] = 'failure'
+                    task.config['error'] = 'Script not specified'
 
-            time.sleep(1)
+            if self.perform_step() == False:
+                time.sleep(10)
 
