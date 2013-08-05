@@ -78,7 +78,7 @@ class GitCheckoutWorker(worker_base.WorkerBase):
                 self.delete_workspace(workspace)
                 continue
 
-            cmd_and_args = [ "git", "checkout", "-q", task.config['params'].get('ref', 'heads/master') ]
+            cmd_and_args = [ "git", "checkout", "-q", task.config['params'].get('ref', 'refs/heads/master') ]
             proc = subprocess.Popen(cmd_and_args, cwd=checkoutdir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             (output, _) = proc.communicate()
 
