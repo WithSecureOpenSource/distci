@@ -72,8 +72,6 @@ class Tasks(object):
 
     def delete_task(self, task_id):
         """ Delete given task """
-        if validators.validate_task_id(task_id) != task_id:
-            return webob.Response(status=400, body=constants.ERROR_TASK_INVALID_ID)
         if not os.path.isdir(self._task_dir(task_id)):
             return webob.Response(status=404, body=constants.ERROR_TASK_NOT_FOUND)
         shutil.rmtree(self._task_dir(task_id))
@@ -81,8 +79,6 @@ class Tasks(object):
 
     def get_task(self, task_id):
         """ Return information on a specific task """
-        if validators.validate_task_id(task_id) != task_id:
-            return webob.Response(status=400, body=constants.ERROR_TASK_INVALID_ID)
         if not os.path.isdir(self._task_dir(task_id)):
             return webob.Response(status=404, body=constants.ERROR_TASK_NOT_FOUND)
         task_data = None
@@ -98,8 +94,6 @@ class Tasks(object):
 
     def update_task(self, request, task_id):
         """ Update data configuration for an existing task """
-        if validators.validate_task_id(task_id) != task_id:
-            return webob.Response(status=400, body=constants.ERROR_TASK_INVALID_ID)
         if not os.path.isdir(self._task_dir(task_id)):
             return webob.Response(status=404, body=constants.ERROR_TASK_NOT_FOUND)
         try:
@@ -143,6 +137,9 @@ class Tasks(object):
             elif request.method == 'POST':
                 return self.create_new_task(request)
         elif len(parts) == 1:
+            if validators.validate_task_id(parts[0]) != parts[0]:
+                return webob.Response(status=400, body=constants.ERROR_TASK_INVALID_ID)
+
             if request.method == 'GET':
                 return self.get_task(parts[0])
             elif request.method == 'PUT':

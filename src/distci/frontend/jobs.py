@@ -51,7 +51,7 @@ class Jobs(object):
             results['jobs'].append(job_id)
         return webob.Response(status=200, body=json.dumps(results), content_type="application/json")
 
-    def create_or_update_job(self, request, job_id_param = None):
+    def create_or_update_job(self, request, job_id_param):
         """ Create a new job """
         try:
             job_config = json.load(request.body_file)
@@ -64,9 +64,6 @@ class Jobs(object):
             return webob.Response(status=400, body=constants.ERROR_JOB_INVALID_PAYLOAD)
         if job_id_param and job_id_param != job_id:
             self.log.error('Job ID mismatch: %r vs %r' % (job_id, job_id_param))
-            return webob.Response(status=400, body=constants.ERROR_JOB_INVALID_ID)
-        if validators.validate_job_id(job_id) == None:
-            self.log.error('Invalid job_id: %r' % job_id)
             return webob.Response(status=400, body=constants.ERROR_JOB_INVALID_ID)
         if self.zknodes:
             lock = distlocks.ZooKeeperLock(self.zknodes, 'job-lock-%s' % job_id)
@@ -103,8 +100,6 @@ class Jobs(object):
 
     def delete_job(self, job_id):
         """ Delete job """
-        if validators.validate_job_id(job_id) == None:
-            return webob.Response(status=400, body=constants.ERROR_JOB_INVALID_ID)
         if not os.path.isdir(self._job_dir(job_id)):
             return webob.Response(status=404, body=constants.ERROR_JOB_NOT_FOUND)
         try:
@@ -115,8 +110,6 @@ class Jobs(object):
 
     def get_job_config(self, job_id):
         """ Get config for a specific job """
-        if validators.validate_job_id(job_id) == None:
-            return webob.Response(status=400, body=constants.ERROR_JOB_INVALID_ID)
         if not os.path.isdir(self._job_dir(job_id)):
             return webob.Response(status=404, body=constants.ERROR_JOB_NOT_FOUND)
         job_data = None
@@ -135,17 +128,22 @@ class Jobs(object):
         if len(parts) == 0:
             if request.method == 'GET':
                 return self.get_jobs()
-        elif len(parts) == 1:
-            if request.method == 'GET':
-                return self.get_job_config(parts[0])
-            elif request.method == 'PUT':
-                return self.create_or_update_job(request, parts[0])
-            elif request.method == 'DELETE':
-                return self.delete_job(parts[0])
-        elif parts[1] == 'builds':
-            return self.jobs_builds.handle_request(request, parts[0], parts[2:])
-        elif parts[1] == 'tags':
-            return self.jobs_tags.handle_request(request, parts[0], parts[2:])
+        else:
+            if validators.validate_job_id(parts[0]) == None:
+                self.log.error('Invalid job_id: %r' % parts[0])
+                return webob.Response(status=400, body=constants.ERROR_JOB_INVALID_ID)
+
+            if len(parts) == 1:
+                if request.method == 'GET':
+                    return self.get_job_config(parts[0])
+                elif request.method == 'PUT':
+                    return self.create_or_update_job(request, parts[0])
+                elif request.method == 'DELETE':
+                    return self.delete_job(parts[0])
+            elif parts[1] == 'builds':
+                return self.jobs_builds.handle_request(request, parts[0], parts[2:])
+            elif parts[1] == 'tags':
+                return self.jobs_tags.handle_request(request, parts[0], parts[2:])
 
         return webob.Response(status=400)
 

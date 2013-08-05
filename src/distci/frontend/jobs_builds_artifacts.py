@@ -77,8 +77,6 @@ class JobsBuildsArtifacts(object):
 
     def get_artifact(self, job_id, build_id, artifact_id):
         """ Get artifact data """
-        if validators.validate_artifact_id(artifact_id) != artifact_id:
-            return webob.Response(status=400, body=constants.ERROR_ARTIFACT_INVALID_ID)
         if not os.path.isfile(self._build_artifact_file(job_id, build_id, artifact_id)):
             return webob.Response(status=404, body=constants.ERROR_ARTIFACT_NOT_FOUND)
         try:
@@ -92,8 +90,6 @@ class JobsBuildsArtifacts(object):
 
     def delete_artifact(self, job_id, build_id, artifact_id):
         """ Delete artifact """
-        if validators.validate_artifact_id(artifact_id) != artifact_id:
-            return webob.Response(status=400, body=constants.ERROR_ARTIFACT_INVALID_ID)
         if not os.path.isfile(self._build_artifact_file(job_id, build_id, artifact_id)):
             return webob.Response(status=404, body=constants.ERROR_ARTIFACT_NOT_FOUND)
         try:
@@ -115,16 +111,20 @@ class JobsBuildsArtifacts(object):
         if len(parts) == 0:
             if request.method == 'POST':
                 return self.create_or_update_artifact(request, job_id, build_id)
-        elif len(parts) == 1:
-            if request.method == 'GET':
-                return self.get_artifact(job_id, build_id, parts[0])
-            elif request.method == 'PUT':
-                return self.create_or_update_artifact(request, job_id, build_id, parts[0])
-            elif request.method == 'DELETE':
-                return self.delete_artifact(job_id, build_id, parts[0])
-        elif len(parts) == 2:
-            if request.method == 'GET':
-                return self.get_artifact(job_id, build_id, parts[0])
+        else:
+            if validators.validate_artifact_id(parts[0]) != parts[0]:
+                return webob.Response(status=400, body=constants.ERROR_ARTIFACT_INVALID_ID)
+
+            if len(parts) == 1:
+                if request.method == 'GET':
+                    return self.get_artifact(job_id, build_id, parts[0])
+                elif request.method == 'PUT':
+                    return self.create_or_update_artifact(request, job_id, build_id, parts[0])
+                elif request.method == 'DELETE':
+                    return self.delete_artifact(job_id, build_id, parts[0])
+            elif len(parts) == 2:
+                if request.method == 'GET':
+                    return self.get_artifact(job_id, build_id, parts[0])
 
         return webob.Response(status=400)
 

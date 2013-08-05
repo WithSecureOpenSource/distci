@@ -61,9 +61,6 @@ class JobsBuilds(object):
 
     def get_builds(self, job_id):
         """ Return all builds for a specific job """
-        if validators.validate_job_id(job_id) == None:
-            self.log.error("Job_id validation failure")
-            return webob.Response(status=400, body=constants.ERROR_JOB_INVALID_ID)
         result = { 'builds': self._get_build_numbers(job_id) }
         if len(result['builds']) > 0:
             result['last_build_number'] = max(result['builds'])
@@ -71,9 +68,6 @@ class JobsBuilds(object):
 
     def trigger_build(self, job_id):
         """ Trigger a new build """
-        if validators.validate_job_id(job_id) == None:
-            self.log.error("Job_id validation failure, '%s'", job_id)
-            return webob.Response(status=400, body=constants.ERROR_JOB_INVALID_ID)
         if self.zknodes:
             lock = distlocks.ZooKeeperLock(self.zknodes, 'job-lock-%s' % job_id)
             if lock.try_lock() != True:
@@ -138,8 +132,6 @@ class JobsBuilds(object):
 
     def get_build_state(self, job_id, build_id):
         """ Get job state """
-        if validators.validate_job_id(job_id) != job_id:
-            return webob.Response(status=400, body=constants.ERROR_JOB_INVALID_ID)
         if validators.validate_build_id(build_id) != build_id:
             return webob.Response(status=400, body=constants.ERROR_BUILD_INVALID_ID)
         if not os.path.isdir(self._build_dir(job_id, build_id)):
@@ -163,9 +155,6 @@ class JobsBuilds(object):
         except ValueError:
             self.log.error('Failed to load build state')
             return webob.Response(status=400, body=constants.ERROR_BUILD_INVALID_PAYLOAD)
-        if validators.validate_job_id(job_id) == None:
-            self.log.error("Job_id validation failure, '%s'", job_id)
-            return webob.Response(status=400, body=constants.ERROR_JOB_INVALID_ID)
         if validators.validate_build_id(build_id) != build_id:
             self.log.error("Build_id validation failure, '%s'", build_id)
             return webob.Response(status=400, body=constants.ERROR_BUILD_INVALID_ID)
@@ -182,9 +171,6 @@ class JobsBuilds(object):
 
     def get_console_log(self, job_id, build_id):
         """ Return contents of the console log """
-        if validators.validate_job_id(job_id) == None:
-            self.log.error("Job_id validation failure, '%s'", job_id)
-            return webob.Response(status=400, body=constants.ERROR_JOB_INVALID_ID)
         if validators.validate_build_id(build_id) != build_id:
             self.log.error("Build_id validation failure, '%s'", build_id)
             return webob.Response(status=400, body=constants.ERROR_BUILD_INVALID_ID)
@@ -200,9 +186,6 @@ class JobsBuilds(object):
 
     def update_console_log(self, request, job_id, build_id):
         """ Append content to the console log """
-        if validators.validate_job_id(job_id) == None:
-            self.log.error("Job_id validation failure, '%s'", job_id)
-            return webob.Response(status=400, body=constants.ERROR_JOB_INVALID_ID)
         if validators.validate_build_id(build_id) != build_id:
             self.log.error("Build_id validation failure, '%s'", build_id)
             return webob.Response(status=400, body=constants.ERROR_BUILD_INVALID_ID)
@@ -219,9 +202,6 @@ class JobsBuilds(object):
 
     def update_workspace(self, request, job_id, build_id):
         """ Store workspace archive """
-        if validators.validate_job_id(job_id) == None:
-            self.log.error("Job_id validation failure, '%s'", job_id)
-            return webob.Response(status=400, body=constants.ERROR_JOB_INVALID_ID)
         if validators.validate_build_id(build_id) != build_id:
             self.log.error("Build_id validation failure, '%s'", build_id)
             return webob.Response(status=400, body=constants.ERROR_BUILD_INVALID_ID)
@@ -254,9 +234,6 @@ class JobsBuilds(object):
 
     def get_workspace(self, job_id, build_id):
         """ Get workspace archive """
-        if validators.validate_job_id(job_id) == None:
-            self.log.error("Job_id validation failure, '%s'", job_id)
-            return webob.Response(status=400, body=constants.ERROR_JOB_INVALID_ID)
         if validators.validate_build_id(build_id) != build_id:
             self.log.error("Build_id validation failure, '%s'", build_id)
             return webob.Response(status=400, body=constants.ERROR_BUILD_INVALID_ID)
@@ -274,9 +251,6 @@ class JobsBuilds(object):
 
     def delete_workspace(self, job_id, build_id):
         """ Delete workspace archive """
-        if validators.validate_job_id(job_id) == None:
-            self.log.error("Job_id validation failure, '%s'", job_id)
-            return webob.Response(status=400, body=constants.ERROR_JOB_INVALID_ID)
         if validators.validate_build_id(build_id) != build_id:
             self.log.error("Build_id validation failure, '%s'", build_id)
             return webob.Response(status=400, body=constants.ERROR_BUILD_INVALID_ID)
@@ -292,9 +266,6 @@ class JobsBuilds(object):
 
     def delete_build(self, job_id, build_id):
         """ Delete a specific build and all related data """
-        if validators.validate_job_id(job_id) == None:
-            self.log.error('Invalid job_id: %r' % job_id)
-            return webob.Response(status=400, body=constants.ERROR_JOB_INVALID_ID)
         if validators.validate_build_id(build_id) != build_id:
             self.log.error("Build_id validation failure, '%s'", build_id)
             return webob.Response(status=400, body=constants.ERROR_BUILD_INVALID_ID)
@@ -308,6 +279,12 @@ class JobsBuilds(object):
 
     def handle_request(self, request, job_id, parts):
         """ Handle requests related to builds """
+        if validators.validate_job_id(job_id) == None:
+            self.log.error('Invalid job_id: %r' % job_id)
+            return webob.Response(status=400, body=constants.ERROR_JOB_INVALID_ID)
+        if not os.path.isdir(self._job_dir(job_id)):
+            return webob.Response(status=404, body=constants.ERROR_BUILD_NOT_FOUND)
+
         if len(parts) == 0:
             if request.method == 'GET':
                 return self.get_builds(job_id)
