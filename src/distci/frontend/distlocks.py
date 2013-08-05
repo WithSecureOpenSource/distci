@@ -20,6 +20,7 @@ DISTRIBUTED_LOCK_CONNECTION_FAILURE = 1
 
 class DistributedLockError(Exception):
     def __init__(self, code, message):
+        Exception.__init__(self, message)
         self.code = code
         self.message = message
 
@@ -34,7 +35,7 @@ class ZooKeeperLock(object):
         self.cv = threading.Condition()
         self.log = logging.getLogger('zookeeper')
 
-        def connection_watcher(handle, type, state, path):
+        def connection_watcher(_handle, _type, _state, _path):
             self.cv.acquire()
             self.connected = True
             self.cv.notify()
@@ -60,7 +61,7 @@ class ZooKeeperLock(object):
             try:
                 zookeeper.create(self.handle, self.lockname, self.uuid, [ZOO_OPEN_ACL_UNSAFE], zookeeper.EPHEMERAL)
             except:
-                self.log.debug('Failed to acquire lock (%r)' % self.lockname)
+                self.log.info('Failed to acquire lock (%r)' % self.lockname)
                 return False
 
             try:

@@ -17,12 +17,12 @@ class RESTHelper(object):
     @classmethod
     def _do_request(cls, base_url, method, path, extra_headers=None, data=None, data_len=None, content_type='application/json'):
         """ Internal helper for HTTP/HTTPS requests """
-        parsed = urlparse.urlsplit(base_url)
-        resource = urlparse.urljoin(parsed.path, path)
-        if parsed.scheme == 'http':
-            conn = httplib.HTTPConnection(parsed.netloc)
+        base_scheme, base_netloc, base_path, _, _ = urlparse.urlsplit(base_url)
+        resource = urlparse.urljoin(base_path, path)
+        if base_scheme == 'http':
+            conn = httplib.HTTPConnection(base_netloc)
         else:
-            conn = httplib.HTTPSConnection(parsed.netloc)
+            conn = httplib.HTTPSConnection(base_netloc)
         headers = {}
         if extra_headers:
             headers.update(extra_headers)
