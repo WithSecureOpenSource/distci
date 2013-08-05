@@ -11,7 +11,7 @@ try:
 except ImportError:
     pass
 
-from distci.frontend import response
+import webob
 
 class Ui(object):
     """ Class for handling UI related requests """
@@ -19,10 +19,10 @@ class Ui(object):
         self.config = config
 
     @classmethod
-    def send_file(cls, start_response, filename):
+    def send_file(cls, filename):
         """ send content """
         if resource_exists is None or not resource_exists('distci.frontend', filename):
-            return response.send_error(start_response, 404)
+            return webob.Response(status=404)
         if filename.endswith('.js'):
             content_type = "application/javascript"
         elif filename.endswith('.css'):
@@ -31,18 +31,17 @@ class Ui(object):
             content_type = "text/html"
         else:
             content_type = "application/octet-stream"
-        data = resource_string('distci.frontend', filename)
-        return response.send_response(start_response, 200, data, content_type)
+        return webob.Response(status=200, body=resource_string('distci.frontend', filename), content_type=content_type)
 
-    def handle_request(self, _environ, start_response, method, parts):
+    def handle_request(self, request, parts):
         """ Parse and serve UI requests """
-        if method != 'GET':
-            return response.send_error(start_response, 403)
+        if request.method != 'GET':
+            return webob.Response(status=403)
         if len(parts) == 0 or parts[0] == '':
-            return self.send_file(start_response, os.path.join('ui', 'index.html'))
+            return self.send_file(os.path.join('ui', 'index.html'))
         elif len(parts) == 2:
             if parts[0] in ['js', 'css', 'html']:
                 filename = os.path.join('ui', parts[0], parts[1])
-                return self.send_file(start_response, filename)
-        return response.send_error(start_response, 404)
+                return self.send_file(filename)
+        return webob.Response(status=404)
 

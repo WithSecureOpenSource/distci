@@ -9,8 +9,9 @@ import logging
 import uuid
 import os
 import json
+import webob
 
-from distci.frontend import validators, request, response, constants
+from distci.frontend import validators, constants
 
 class JobsBuildsArtifacts(object):
     def __init__(self, config):
@@ -33,14 +34,14 @@ class JobsBuildsArtifacts(object):
         """ Return filename for a build state file """
         return os.path.join(self._build_artifact_dir(job_id, build_id), artifact_id)
 
-    def create_or_update_artifact(self, environ, start_response, job_id, build_id, artifact_id_param = None):
+    def create_or_update_artifact(self, request, job_id, build_id, artifact_id_param = None):
         """ Create or update an artifact """
         if artifact_id_param is not None:
             artifact_id = artifact_id_param
             if validators.validate_artifact_id(artifact_id) != artifact_id:
-                return response.send_error(start_response, 400, constants.ERROR_ARTIFACT_INVALID_ID)
+                return webob.Response(status=400, body=constants.ERROR_ARTIFACT_INVALID_ID)
             if not os.path.isfile(self._build_artifact_file(job_id, build_id, artifact_id)):
-                return response.send_error(start_response, 404, constants.ERROR_ARTIFACT_NOT_FOUND)
+                return webob.Response(status=404, body=constants.ERROR_ARTIFACT_NOT_FOUND)
         else:
             artifact_id = str(uuid.uuid4())
 
@@ -48,14 +49,15 @@ class JobsBuildsArtifacts(object):
             try:
                 os.mkdir(self._build_artifact_dir(job_id, build_id))
             except IOError:
-                return response.send_error(start_response, 400, constants.ERROR_ARTIFACT_WRITE_FAILED)
+                return webob.Response(status=400, body=constants.ERROR_ARTIFACT_WRITE_FAILED)
 
-        ifh, data_len = request.get_request_data_handle_and_length(environ)
+        data_len = request.content_length
+        ifh = request.body_file
 
         try:
             ofh = open(self._build_artifact_file(job_id, build_id, artifact_id), 'wb')
         except IOError:
-            return response.send_error(start_response, 400, constants.ERROR_ARTIFACT_WRITE_FAILED)
+            return webob.Response(status=400, body=constants.ERROR_ARTIFACT_WRITE_FAILED)
 
         try:
             while data_len > 0:
@@ -67,68 +69,62 @@ class JobsBuildsArtifacts(object):
                 data_len = data_len - len(data)
         except IOError:
             ofh.close()
-            return response.send_error(start_response, 400, constants.ERROR_ARTIFACT_WRITE_FAILED)
+            return webob.Response(status=400, body=constants.ERROR_ARTIFACT_WRITE_FAILED)
 
         ofh.close()
 
-        return response.send_response(start_response, 200 if artifact_id_param else 201, json.dumps({'job_id': job_id, 'build_number': int(build_id), 'artifact_id': artifact_id}))
+        return webob.Response(status=200 if artifact_id_param else 201, body=json.dumps({'job_id': job_id, 'build_number': int(build_id), 'artifact_id': artifact_id}), content_type="application/json")
 
-    def get_artifact(self, environ, start_response, job_id, build_id, artifact_id):
+    def get_artifact(self, job_id, build_id, artifact_id):
         """ Get artifact data """
         if validators.validate_artifact_id(artifact_id) != artifact_id:
-            return response.send_error(start_response, 400, constants.ERROR_ARTIFACT_INVALID_ID)
+            return webob.Response(status=400, body=constants.ERROR_ARTIFACT_INVALID_ID)
         if not os.path.isfile(self._build_artifact_file(job_id, build_id, artifact_id)):
-            return response.send_error(start_response, 404, constants.ERROR_ARTIFACT_NOT_FOUND)
+            return webob.Response(status=404, body=constants.ERROR_ARTIFACT_NOT_FOUND)
         try:
             ifh = open(self._build_artifact_file(job_id, build_id, artifact_id))
         except IOError:
-            return response.send_error(start_response, 400, constants.ERROR_ARTIFACT_READ_FAILED)
+            return webob.Response(status=400, body=constants.ERROR_ARTIFACT_READ_FAILED)
 
         file_len = os.path.getsize(self._build_artifact_file(job_id, build_id, artifact_id))
 
-        return response.send_response_file(environ, start_response, 200, ifh, file_len)
+        return webob.Response(status=200, body_file=ifh, content_length=file_len)
 
-    def delete_artifact(self, start_response, job_id, build_id, artifact_id):
+    def delete_artifact(self, job_id, build_id, artifact_id):
         """ Delete artifact """
         if validators.validate_artifact_id(artifact_id) != artifact_id:
-            return response.send_error(start_response, 400, constants.ERROR_ARTIFACT_INVALID_ID)
+            return webob.Response(status=400, body=constants.ERROR_ARTIFACT_INVALID_ID)
         if not os.path.isfile(self._build_artifact_file(job_id, build_id, artifact_id)):
-            return response.send_error(start_response, 404, constants.ERROR_ARTIFACT_NOT_FOUND)
+            return webob.Response(status=404, body=constants.ERROR_ARTIFACT_NOT_FOUND)
         try:
             os.unlink(self._build_artifact_file(job_id, build_id, artifact_id))
         except IOError:
-            return response.send_error(start_response, 400, constants.ERROR_ARTIFACT_WRITE_FAILED)
+            return webob.Response(status=400, body=constants.ERROR_ARTIFACT_WRITE_FAILED)
 
-        return response.send_response(start_response, 204)
+        return webob.Response(status=204)
 
-    def handle_request(self, environ, start_response, method, job_id, build_id, parts):
+    def handle_request(self, request, job_id, build_id, parts):
         """ Handle requests related to build artifacts """
         if validators.validate_job_id(job_id) == None:
             self.log.error('Invalid job_id: %r' % job_id)
-            return response.send_error(start_response, 400, constants.ERROR_JOB_INVALID_ID)
+            return webob.Response(status=400, body=constants.ERROR_JOB_INVALID_ID)
         if validators.validate_build_id(build_id) != build_id:
             self.log.error("Build_id validation failure, '%s'", build_id)
-            return response.send_error(start_response, 400, constants.ERROR_BUILD_INVALID_ID)
+            return webob.Response(status=400, body=constants.ERROR_BUILD_INVALID_ID)
 
         if len(parts) == 0:
-            if method == 'POST':
-                return self.create_or_update_artifact(environ, start_response, job_id, build_id)
-            else:
-                return response.send_error(start_response, 400)
+            if request.method == 'POST':
+                return self.create_or_update_artifact(request, job_id, build_id)
         elif len(parts) == 1:
-            if method == 'GET':
-                return self.get_artifact(environ, start_response, job_id, build_id, parts[0])
-            elif method == 'PUT':
-                return self.create_or_update_artifact(environ, start_response, job_id, build_id, parts[0])
-            elif method == 'DELETE':
-                return self.delete_artifact(start_response, job_id, build_id, parts[0])
-            else:
-                return response.send_error(start_response, 400)
+            if request.method == 'GET':
+                return self.get_artifact(job_id, build_id, parts[0])
+            elif request.method == 'PUT':
+                return self.create_or_update_artifact(request, job_id, build_id, parts[0])
+            elif request.method == 'DELETE':
+                return self.delete_artifact(job_id, build_id, parts[0])
         elif len(parts) == 2:
-            if method == 'GET':
-                return self.get_artifact(environ, start_response, job_id, build_id, parts[0])
-            else:
-                return response.send_error(start_response, 400)
+            if request.method == 'GET':
+                return self.get_artifact(job_id, build_id, parts[0])
 
-        return response.send_response(start_response, 400)
+        return webob.Response(status=400)
 

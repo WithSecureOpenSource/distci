@@ -11,8 +11,9 @@ import json
 import shutil
 import logging
 import time
+import webob
 
-from distci.frontend import validators, response, request, distlocks, constants
+from distci.frontend import validators, distlocks, constants
 
 class Tasks(object):
     def __init__(self, config):
@@ -46,7 +47,7 @@ class Tasks(object):
         """ Format task configuration for HTTP replies """
         return {'id': task_id, 'data': self._load_task_config(task_id)}
 
-    def get_tasks(self, start_response):
+    def get_tasks(self):
         """ Return information on all open tasks """
         result = { 'tasks': [] }
         task_ids = os.listdir(self._data_dir())
@@ -54,36 +55,36 @@ class Tasks(object):
             if not os.path.isdir(self._task_dir(task_id)):
                 continue
             result['tasks'].append(task_id)
-        return response.send_response(start_response, 200, json.dumps(result))
+        return webob.Response(status=200, body=json.dumps(result), content_type="application/json")
 
-    def create_new_task(self, environ, start_response):
+    def create_new_task(self, request):
         """ Post a new task """
         try:
-            task_description = json.loads(request.read_request_data(environ))
+            task_description = json.load(request.body_file)
         except ValueError:
-            self.log.debug('Failed to load task data')
-            return response.send_error(start_response, 400, constants.ERROR_TASK_INVALID_PAYLOAD)
+            self.log.error('Failed to load task data')
+            return webob.Response(status=400, body=constants.ERROR_TASK_INVALID_PAYLOAD)
 
         task_id_candidate = str(uuid.uuid4())
         os.mkdir(self._task_dir(task_id_candidate))
         self._save_task_config(task_id_candidate, task_description)
-        return response.send_response(start_response, 201, json.dumps({'id': task_id_candidate, 'data': task_description}))
+        return webob.Response(status=201, body=json.dumps({'id': task_id_candidate, 'data': task_description}), content_type="application/json")
 
-    def delete_task(self, start_response, task_id):
+    def delete_task(self, task_id):
         """ Delete given task """
         if validators.validate_task_id(task_id) != task_id:
-            return response.send_error(start_response, 400, constants.ERROR_TASK_INVALID_ID)
+            return webob.Response(status=400, body=constants.ERROR_TASK_INVALID_ID)
         if not os.path.isdir(self._task_dir(task_id)):
-            return response.send_error(start_response, 404, constants.ERROR_TASK_NOT_FOUND)
+            return webob.Response(status=404, body=constants.ERROR_TASK_NOT_FOUND)
         shutil.rmtree(self._task_dir(task_id))
-        return response.send_response(start_response, 204)
+        return webob.Response(status=204)
 
-    def get_task(self, start_response, task_id):
+    def get_task(self, task_id):
         """ Return information on a specific task """
         if validators.validate_task_id(task_id) != task_id:
-            return response.send_error(start_response, 400, constants.ERROR_TASK_INVALID_ID)
+            return webob.Response(status=400, body=constants.ERROR_TASK_INVALID_ID)
         if not os.path.isdir(self._task_dir(task_id)):
-            return response.send_error(start_response, 404, constants.ERROR_TASK_NOT_FOUND)
+            return webob.Response(status=404, body=constants.ERROR_TASK_NOT_FOUND)
         task_data = None
         for _ in range(10):
             try:
@@ -92,28 +93,26 @@ class Tasks(object):
             except:
                 time.sleep(0.1)
         if not task_data:
-            return response.send_error(start_response, 409, constants.ERROR_TASK_LOCKED)
-        return response.send_response(start_response, 200, task_data)
+            return webob.Response(status=409, body=constants.ERROR_TASK_LOCKED)
+        return webob.Response(status=200, body=task_data, content_type="application/json")
 
-    def update_task(self, environ, start_response, task_id):
+    def update_task(self, request, task_id):
         """ Update data configuration for an existing task """
         if validators.validate_task_id(task_id) != task_id:
-            self.log.error("Failed to pass validation: '%s'" % task_id)
-            return response.send_error(start_response, 400, constants.ERROR_TASK_INVALID_ID)
+            return webob.Response(status=400, body=constants.ERROR_TASK_INVALID_ID)
         if not os.path.isdir(self._task_dir(task_id)):
-            self.log.debug("Task not found '%s'" % task_id)
-            return response.send_error(start_response, 404, constants.ERROR_TASK_NOT_FOUND)
+            return webob.Response(status=404, body=constants.ERROR_TASK_NOT_FOUND)
         try:
-            new_task_description = json.loads(request.read_request_data(environ))
+            new_task_description = json.load(request.body_file)
         except ValueError:
             self.log.error("Decoding task data failed '%s'" % task_id)
-            return response.send_error(start_response, 400, constants.ERROR_TASK_INVALID_PAYLOAD)
+            return webob.Response(status=400, body=constants.ERROR_TASK_INVALID_PAYLOAD)
         if self.zknodes:
             lock = distlocks.ZooKeeperLock(self.zknodes, 'task-lock-%s' % task_id)
             if lock.try_lock() != True:
                 lock.close()
-                self.log.debug("Task locked '%s'" % task_id)
-                return response.send_response(start_response, 409, constants.ERROR_TASK_LOCKED)
+                self.log.warn("Task locked '%s'" % task_id)
+                return webob.Response(status=409, body=constants.ERROR_TASK_LOCKED)
         else:
             lock = None
         try:
@@ -123,39 +122,33 @@ class Tasks(object):
                 lock.unlock()
                 lock.close()
             self.log.error("Failed to read task data '%s'" % task_id)
-            return response.send_response(start_response, 500)
+            return webob.Response(status=500)
         if old_task_description.has_key('assignee') and new_task_description.has_key('assignee') and old_task_description['assignee'] != new_task_description['assignee']:
             if lock:
                 lock.unlock()
                 lock.close()
-            self.log.debug("Task assignment conflict '%s'" % task_id)
-            return response.send_response(start_response, 409, constants.ERROR_TASK_WRONG_ACTOR)
+            self.log.info("Task assignment conflict '%s'" % task_id)
+            return webob.Response(status=409, body=constants.ERROR_TASK_WRONG_ACTOR)
         self._save_task_config(task_id, new_task_description)
         if lock:
             lock.unlock()
             lock.close()
-        return response.send_response(start_response, 200, json.dumps({'id': task_id, 'data': new_task_description}))
+        return webob.Response(status=200, body=json.dumps({'id': task_id, 'data': new_task_description}), content_type="application/json")
 
-    def handle_request(self, environ, start_response, method, parts):
+    def handle_request(self, request, parts):
         """ Parse and dispatch task API requests """
-        self.log.debug('%s %r' % (method, parts))
         if len(parts) == 0:
-            if method == 'GET':
-                retval = self.get_tasks(start_response)
-            elif method == 'POST':
-                retval = self.create_new_task(environ, start_response)
-            else:
-                retval = response.send_error(start_response, 400)
+            if request.method == 'GET':
+                return self.get_tasks()
+            elif request.method == 'POST':
+                return self.create_new_task(request)
         elif len(parts) == 1:
-            if method == 'GET':
-                retval = self.get_task(start_response, parts[0])
-            elif method == 'PUT':
-                retval = self.update_task(environ, start_response, parts[0])
-            elif method == 'DELETE':
-                retval = self.delete_task(start_response, parts[0])
-            else:
-                retval = response.send_error(start_response, 400)
-        else:
-            retval = response.send_error(start_response, 400)
-        return retval
+            if request.method == 'GET':
+                return self.get_task(parts[0])
+            elif request.method == 'PUT':
+                return self.update_task(request, parts[0])
+            elif request.method == 'DELETE':
+                return self.delete_task(parts[0])
+
+        return webob.Response(status=400)
 
