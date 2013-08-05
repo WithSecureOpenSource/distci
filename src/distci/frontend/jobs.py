@@ -123,6 +123,31 @@ class Jobs(object):
             return webob.Response(status=409, body=constants.ERROR_JOB_LOCKED)
         return webob.Response(status=200, body=job_data, content_type="application/json")
 
+    def github_webhook_trigger(self, request, job_id):
+        """ Trigger builds via github webhook """
+        try:
+            data = json.loads(request.params['payload'])
+            ref = data['ref']
+        except (AttributeError, ValueError, KeyError):
+            return webob.Response(status=400)
+
+        if not os.path.isdir(self._job_dir(job_id)):
+            return webob.Response(status=404, body=constants.ERROR_JOB_NOT_FOUND)
+        job_config = None
+        for _ in range(10):
+            try:
+                job_config = self._load_job_config(job_id)
+                break
+            except (OSError, ValueError):
+                time.sleep(0.1)
+        if not job_config:
+            return webob.Response(status=409, body=constants.ERROR_JOB_LOCKED)
+        for task in job_config.get('tasks', []):
+            if task.get('type') == 'git-checkout':
+                if task.get('params', {}).get('ref') == ref:
+                    return self.jobs_builds.trigger_build(job_id)
+        return webob.Response(status=400)
+
     def handle_request(self, request, parts):
         """ Main dispatcher """
         if len(parts) == 0:
@@ -144,6 +169,8 @@ class Jobs(object):
                 return self.jobs_builds.handle_request(request, parts[0], parts[2:])
             elif parts[1] == 'tags':
                 return self.jobs_tags.handle_request(request, parts[0], parts[2:])
+            elif len(parts) == 2 and parts[1] == 'github-webhook' and request.method == 'POST':
+                return self.github_webhook_trigger(request, parts[0])
 
         return webob.Response(status=400)
 
