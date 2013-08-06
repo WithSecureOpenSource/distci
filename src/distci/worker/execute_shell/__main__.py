@@ -35,8 +35,8 @@ def main(argv):
         print "failed to parse configuration file"
         return -1
 
-    if config.get('log_file'):
-        log_level = logging._levelNames.get(config.get('log_level', 'info').upper())
+    if config.get('log_level'):
+        log_level = logging.getLevelName(config.get('log_level').upper())
         logging.basicConfig(level=log_level, format='%(asctime)s\t%(threadName)s\t%(name)s\t%(levelname)s\t%(message)s', filename=config.get('log_file'))
 
     worker = execute_shell.ExecuteShellWorker(config)
