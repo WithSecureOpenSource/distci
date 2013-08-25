@@ -70,12 +70,12 @@ class JobsBuilds(object):
         """ Trigger a new build """
         if self.zknodes:
             lock = sync.ZooKeeperLock(self.zknodes, 'job-lock-%s' % job_id)
-            if lock.try_lock() != True:
-                lock.close()
-                self.log.info("Job locked '%s'" % job_id)
-                return webob.Response(status=400, body=constants.ERROR_JOB_LOCKED)
         else:
-            lock = None
+            lock = sync.PhonyLock('job-lock-%s' % job_id)
+        if lock.try_lock() != True:
+            lock.close()
+            self.log.info("Job locked '%s'" % job_id)
+            return webob.Response(status=400, body=constants.ERROR_JOB_LOCKED)
 
         build_ids = self._get_build_numbers(job_id)
         if len(build_ids) > 0:

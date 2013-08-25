@@ -96,3 +96,16 @@ class ZooKeeperLock(object):
             self.connected = False
             self.handle = None
 
+class PhonyLock(object):
+    def __init__(self, _lockname):
+        pass
+
+    def try_lock(self):
+        return True
+
+    def unlock(self):
+        pass
+
+    def close(self):
+        pass
+

@@ -103,30 +103,27 @@ class Tasks(object):
             return webob.Response(status=400, body=constants.ERROR_TASK_INVALID_PAYLOAD)
         if self.zknodes:
             lock = sync.ZooKeeperLock(self.zknodes, 'task-lock-%s' % task_id)
-            if lock.try_lock() != True:
-                lock.close()
-                self.log.warn("Task locked '%s'" % task_id)
-                return webob.Response(status=409, body=constants.ERROR_TASK_LOCKED)
         else:
-            lock = None
+            lock = sync.PhonyLock('task-lock-%s' % task_id)
+        if lock.try_lock() != True:
+            lock.close()
+            self.log.warn("Task locked '%s'" % task_id)
+            return webob.Response(status=409, body=constants.ERROR_TASK_LOCKED)
         try:
             old_task_description = self._load_task_config(task_id)
         except:
-            if lock:
-                lock.unlock()
-                lock.close()
+            lock.unlock()
+            lock.close()
             self.log.error("Failed to read task data '%s'" % task_id)
             return webob.Response(status=500)
         if old_task_description.has_key('assignee') and new_task_description.has_key('assignee') and old_task_description['assignee'] != new_task_description['assignee']:
-            if lock:
-                lock.unlock()
-                lock.close()
+            lock.unlock()
+            lock.close()
             self.log.info("Task assignment conflict '%s'" % task_id)
             return webob.Response(status=409, body=constants.ERROR_TASK_WRONG_ACTOR)
         self._save_task_config(task_id, new_task_description)
-        if lock:
-            lock.unlock()
-            lock.close()
+        lock.unlock()
+        lock.close()
         return webob.Response(status=200, body=json.dumps({'id': task_id, 'data': new_task_description}), content_type="application/json")
 
     def handle_request(self, request, parts):

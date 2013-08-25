@@ -67,34 +67,31 @@ class Jobs(object):
             return webob.Response(status=400, body=constants.ERROR_JOB_INVALID_ID)
         if self.zknodes:
             lock = sync.ZooKeeperLock(self.zknodes, 'job-lock-%s' % job_id)
-            if lock.try_lock() != True:
-                lock.close()
-                self.log.warn("Job locked '%s'" % job_id)
-                return webob.Response(status=400, body=constants.ERROR_JOB_LOCKED)
         else:
-            lock = None
+            lock = sync.PhonyLock('job-lock-%s' % job_id)
+        if lock.try_lock() != True:
+            lock.close()
+            self.log.warn("Job locked '%s'" % job_id)
+            return webob.Response(status=400, body=constants.ERROR_JOB_LOCKED)
 
         if not os.path.isdir(self._job_dir(job_id)):
             try:
                 os.mkdir(self._job_dir(job_id))
             except OSError:
-                if lock:
-                    lock.unlock()
-                    lock.close()
+                lock.unlock()
+                lock.close()
                 return webob.Response(status=500, body=constants.ERROR_JOB_CONFIG_WRITE_FAILED)
 
         try:
             file(self._job_config_file(job_id), 'wb').write(json.dumps(job_config))
         except IOError:
             self.log.error('Failed to write job config, job_id %s' % job_id)
-            if lock:
-                lock.unlock()
-                lock.close()
-            return webob.Response(status=500, body=constants.ERROR_JOB_CONFIG_WRITE_FAILED)
-
-        if lock:
             lock.unlock()
             lock.close()
+            return webob.Response(status=500, body=constants.ERROR_JOB_CONFIG_WRITE_FAILED)
+
+        lock.unlock()
+        lock.close()
 
         return webob.Response(status=200 if job_id_param else 201, body=json.dumps({'job_id':job_id, 'config':job_config}), content_type="application/json")
 
