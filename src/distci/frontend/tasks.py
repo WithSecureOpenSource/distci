@@ -13,7 +13,7 @@ import logging
 import time
 import webob
 
-from distci.frontend import validators, distlocks, constants
+from distci.frontend import validators, sync, constants
 
 class Tasks(object):
     def __init__(self, config):
@@ -102,7 +102,7 @@ class Tasks(object):
             self.log.error("Decoding task data failed '%s'" % task_id)
             return webob.Response(status=400, body=constants.ERROR_TASK_INVALID_PAYLOAD)
         if self.zknodes:
-            lock = distlocks.ZooKeeperLock(self.zknodes, 'task-lock-%s' % task_id)
+            lock = sync.ZooKeeperLock(self.zknodes, 'task-lock-%s' % task_id)
             if lock.try_lock() != True:
                 lock.close()
                 self.log.warn("Task locked '%s'" % task_id)

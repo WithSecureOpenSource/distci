@@ -12,7 +12,7 @@ import time
 import shutil
 import webob
 
-from distci.frontend import validators, jobs_builds_artifacts, distlocks, constants
+from distci.frontend import validators, jobs_builds_artifacts, sync, constants
 
 from distci import distcilib
 
@@ -69,7 +69,7 @@ class JobsBuilds(object):
     def trigger_build(self, job_id):
         """ Trigger a new build """
         if self.zknodes:
-            lock = distlocks.ZooKeeperLock(self.zknodes, 'job-lock-%s' % job_id)
+            lock = sync.ZooKeeperLock(self.zknodes, 'job-lock-%s' % job_id)
             if lock.try_lock() != True:
                 lock.close()
                 self.log.info("Job locked '%s'" % job_id)

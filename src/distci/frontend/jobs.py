@@ -12,7 +12,7 @@ import shutil
 import time
 import webob
 
-from distci.frontend import validators, jobs_builds, jobs_tags, distlocks, constants
+from distci.frontend import validators, jobs_builds, jobs_tags, sync, constants
 
 class Jobs(object):
     """ Class for handling job related requests """
@@ -66,7 +66,7 @@ class Jobs(object):
             self.log.error('Job ID mismatch: %r vs %r' % (job_id, job_id_param))
             return webob.Response(status=400, body=constants.ERROR_JOB_INVALID_ID)
         if self.zknodes:
-            lock = distlocks.ZooKeeperLock(self.zknodes, 'job-lock-%s' % job_id)
+            lock = sync.ZooKeeperLock(self.zknodes, 'job-lock-%s' % job_id)
             if lock.try_lock() != True:
                 lock.close()
                 self.log.warn("Job locked '%s'" % job_id)

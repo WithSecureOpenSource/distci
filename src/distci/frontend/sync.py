@@ -1,5 +1,5 @@
 """
-Distributed lock management
+Distributed state and lock management
 
 Copyright (c) 2012-2013 Heikki Nousiainen, F-Secure
 See LICENSE for details
@@ -15,10 +15,10 @@ import logging
 
 ZOO_OPEN_ACL_UNSAFE = {"perms": 0x1f, "scheme": "world", "id": "anyone"}
 
-DISTRIBUTED_LOCK_SUCCESS = 0
-DISTRIBUTED_LOCK_CONNECTION_FAILURE = 1
+SYNC_LOCK_SUCCESS = 0
+SYNC_LOCK_CONNECTION_FAILURE = 1
 
-class DistributedLockError(Exception):
+class SyncError(Exception):
     def __init__(self, code, message):
         Exception.__init__(self, message)
         self.code = code
@@ -47,13 +47,13 @@ class ZooKeeperLock(object):
         except:
             self.log.exception('Failed to connect Zookeeper cluster (%r)' % zkservers)
             self.cv.release()
-            raise DistributedLockError(DISTRIBUTED_LOCK_CONNECTION_FAILURE, "Failed to connect to Zookeeper cluster")
+            raise SyncError(SYNC_LOCK_CONNECTION_FAILURE, "Failed to connect to Zookeeper cluster")
 
         self.cv.wait(4.0)
         if not self.connected:
             self.log.error('Failed to connect to Zookeeper cluster (%r)' % zkservers)
             self.cv.release()
-            raise DistributedLockError(DISTRIBUTED_LOCK_CONNECTION_FAILURE, "Failed to connect to Zookeeper cluster")
+            raise SyncError(SYNC_LOCK_CONNECTION_FAILURE, "Failed to connect to Zookeeper cluster")
         self.cv.release()
 
     def try_lock(self):
