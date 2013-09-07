@@ -65,6 +65,8 @@ class BuildControlWorker(worker_base.WorkerBase):
         subtask_config = self.build_states[task_key]['job_config']['tasks'][subtask_index]
         if subtask_config['type'] == 'git-checkout':
             capabilities = [ 'git_checkout_v1' ]
+        elif subtask_config['type'] == 'copy-artifacts':
+            capabilities = [ 'copy_artifacts_v1' ]
         elif subtask_config['type'] == 'execute-shell':
             capabilities = [ 'execute_shell_v1' ]
             for label in subtask_config['params'].get('nodelabels', []):
