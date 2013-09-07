@@ -5,8 +5,9 @@ Copyright (c) 2012-2013 Heikki Nousiainen, F-Secure
 See LICENSE for details
 """
 
-from distci.frontend import response, jobs, tasks, ui
+from distci.frontend import jobs, tasks, ui
 import logging
+import webob
 
 class Dispatcher(object):
     def __init__(self, config):
@@ -16,29 +17,27 @@ class Dispatcher(object):
         self.jobs = jobs.Jobs(config)
         self.ui = ui.Ui(config)
 
-    def handle_request(self, environ, start_response):
+    def handle_request(self, request):
         """ Parse top level request for dispatching """
 
-        if 'PATH_INFO' not in environ:
+        if not request.path_info:
             self.log.error('PATH_INFO not specified')
-            return response.send_error(start_response, 500)
+            return webob.Response(status=500)
 
-        method = environ['REQUEST_METHOD']
-
-        parts = environ['PATH_INFO'].split('/')[1:]
+        parts = request.path_info.split('/')[1:]
         if len(parts) == 0:
-            self.log.error('Invalid PATH_INFO, (%r)', environ['PATH_INFO'])
-            return response.send_error(start_response, 400)
+            self.log.error('Invalid PATH_INFO, (%r)', request.path_info)
+            return webob.Response(status=400)
 
         if parts[0] == 'jobs':
-            return self.jobs.handle_request(environ, start_response, method, parts[1:])
+            return self.jobs.handle_request(request, parts[1:])
         elif parts[0] == 'tasks':
-            return self.tasks.handle_request(environ, start_response, method, parts[1:])
+            return self.tasks.handle_request(request, parts[1:])
         elif parts[0] == 'ui':
-            return self.ui.handle_request(environ, start_response, method, parts[1:])
+            return self.ui.handle_request(request, parts[1:])
         elif parts[0] == '':
-            return response.send_response(start_response, 204)
+            return webob.Response(status=204)
 
         self.log.warn('Unknown command %r', parts[0])
-        return response.send_error(start_response, 400)
+        return webob.Response(status=404)
 

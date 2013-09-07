@@ -6,6 +6,7 @@ See LICENSE for details
 """
 
 import json
+from webob.dec import wsgify
 
 from distci.frontend import dispatcher
 
@@ -14,8 +15,9 @@ class Frontend(object):
         self.config = config
         self.dispatcher = dispatcher.Dispatcher(self.config)
 
-    def __call__(self, environ, start_request):
-        return self.dispatcher.handle_request(environ, start_request)
+    @wsgify
+    def __call__(self, request):
+        return self.dispatcher.handle_request(request)
 
 def build_frontend_app(config_file):
     config = json.load(file(config_file))

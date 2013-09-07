@@ -8,7 +8,7 @@
             "params":
             {
                 "repository": "https://github.com/F-Secure/distci.git",
-                "ref": "heads/master",
+                "ref": "refs/heads/master",
                 "checkout-dir": "distci"
             }
         },
