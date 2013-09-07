@@ -72,7 +72,7 @@ class BuildControlWorker(worker_base.WorkerBase):
         elif subtask_config['type'] == 'publish-artifacts':
             capabilities = [ 'publish_artifacts_v1' ]
         else:
-            self.build_states[task_key]['build_state']['tasks'].append({
+            self.build_states[task_key]['build_state']['tasks'][subtask_index]({
                 'status': 'complete',
                 'result': 'error',
                 'error_message': 'Unknown subtask type %s' % subtask_config['type'] })
