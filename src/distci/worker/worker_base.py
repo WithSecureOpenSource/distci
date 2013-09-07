@@ -125,6 +125,7 @@ class WorkerBase(object):
 
         tarf.close()
         ws_len = archive.tell()
+        self.log.debug('Workspace archive size: %d', ws_len)
 
         for _ in range(self.worker_config.get('retry_count', 10)):
             archive.seek(0)

@@ -8,11 +8,10 @@ See LICENSE for details
 import os
 import uuid
 import json
-import shutil
 import logging
-import time
+import webob
 
-from distci.frontend import validators, response, request, distlocks, constants
+from distci.frontend import validators, sync, constants
 
 class Tasks(object):
     def __init__(self, config):
@@ -21,6 +20,11 @@ class Tasks(object):
         self.zknodes = config.get('zookeeper_nodes', [])
         if len(self.zknodes) == 0:
             self.zknodes = None
+        else:
+            zk = sync.ZooKeeperData(self.zknodes)
+            zk.set('/distci', '')
+            zk.set('/distci/tasks', '')
+            zk.close()
 
     def _data_dir(self):
         """ Return tasks directory """
@@ -46,116 +50,116 @@ class Tasks(object):
         """ Format task configuration for HTTP replies """
         return {'id': task_id, 'data': self._load_task_config(task_id)}
 
-    def get_tasks(self, start_response):
+    def get_tasks(self):
         """ Return information on all open tasks """
-        result = { 'tasks': [] }
-        task_ids = os.listdir(self._data_dir())
-        for task_id in task_ids:
-            if not os.path.isdir(self._task_dir(task_id)):
-                continue
-            result['tasks'].append(task_id)
-        return response.send_response(start_response, 200, json.dumps(result))
+        if self.zknodes:
+            data_conn = sync.ZooKeeperData(self.zknodes, '/distci/tasks')
+        else:
+            data_conn = sync.FSData(self._data_dir())
 
-    def create_new_task(self, environ, start_response):
+        result = {'tasks': data_conn.list() }
+        data_conn.close()
+        return webob.Response(status=200, body=json.dumps(result), content_type="application/json")
+
+
+    def create_new_task(self, request):
         """ Post a new task """
         try:
-            task_description = json.loads(request.read_request_data(environ))
+            task_description = json.load(request.body_file)
         except ValueError:
-            self.log.debug('Failed to load task data')
-            return response.send_error(start_response, 400, constants.ERROR_TASK_INVALID_PAYLOAD)
+            self.log.error('Failed to load task data')
+            return webob.Response(status=400, body=constants.ERROR_TASK_INVALID_PAYLOAD)
 
         task_id_candidate = str(uuid.uuid4())
-        os.mkdir(self._task_dir(task_id_candidate))
-        self._save_task_config(task_id_candidate, task_description)
-        return response.send_response(start_response, 201, json.dumps({'id': task_id_candidate, 'data': task_description}))
+        if self.zknodes:
+            data_conn = sync.ZooKeeperData(self.zknodes, '/distci/tasks')
+        else:
+            data_conn = sync.FSData(self._data_dir())
 
-    def delete_task(self, start_response, task_id):
+        if data_conn.set('/%s' % task_id_candidate, json.dumps(task_description)) == True:
+            data_conn.close()
+            return webob.Response(status=201, body=json.dumps({'id': task_id_candidate, 'data': task_description}), content_type="application/json")
+        else:
+            data_conn.close()
+            # FIXME: error code
+            return webob.Response(status=500, body=constants.ERROR_TASK_LOCKED)
+
+    def delete_task(self, task_id):
         """ Delete given task """
-        if validators.validate_task_id(task_id) != task_id:
-            return response.send_error(start_response, 400, constants.ERROR_TASK_INVALID_ID)
-        if not os.path.isdir(self._task_dir(task_id)):
-            return response.send_error(start_response, 404, constants.ERROR_TASK_NOT_FOUND)
-        shutil.rmtree(self._task_dir(task_id))
-        return response.send_response(start_response, 204)
+        if self.zknodes:
+            data_conn = sync.ZooKeeperData(self.zknodes, '/distci/tasks')
+        else:
+            data_conn = sync.FSData(self._data_dir())
+        data_conn.delete('/%s' % task_id)
+        data_conn.close()
+        return webob.Response(status=204)
 
-    def get_task(self, start_response, task_id):
+    def get_task(self, task_id):
         """ Return information on a specific task """
-        if validators.validate_task_id(task_id) != task_id:
-            return response.send_error(start_response, 400, constants.ERROR_TASK_INVALID_ID)
-        if not os.path.isdir(self._task_dir(task_id)):
-            return response.send_error(start_response, 404, constants.ERROR_TASK_NOT_FOUND)
-        task_data = None
-        for _ in range(10):
-            try:
-                task_data = json.dumps(self._prepare_task_data(task_id))
-                break
-            except:
-                time.sleep(0.1)
-        if not task_data:
-            return response.send_error(start_response, 409, constants.ERROR_TASK_LOCKED)
-        return response.send_response(start_response, 200, task_data)
+        if self.zknodes:
+            data_conn = sync.ZooKeeperData(self.zknodes, '/distci/tasks')
+        else:
+            data_conn = sync.FSData(self._data_dir())
 
-    def update_task(self, environ, start_response, task_id):
+        task_data = data_conn.get('/%s' % task_id)
+        if task_data is None:
+            data_conn.close()
+            return webob.Response(status=404, body=constants.ERROR_TASK_NOT_FOUND)
+        data_conn.close()
+        returned_data = {'id': task_id, 'data': json.loads(task_data) }
+        return webob.Response(status=200, body=json.dumps(returned_data), content_type="application/json")
+
+    def update_task(self, request, task_id):
         """ Update data configuration for an existing task """
-        if validators.validate_task_id(task_id) != task_id:
-            self.log.error("Failed to pass validation: '%s'" % task_id)
-            return response.send_error(start_response, 400, constants.ERROR_TASK_INVALID_ID)
-        if not os.path.isdir(self._task_dir(task_id)):
-            self.log.debug("Task not found '%s'" % task_id)
-            return response.send_error(start_response, 404, constants.ERROR_TASK_NOT_FOUND)
+        if self.zknodes:
+            data_conn = sync.ZooKeeperData(self.zknodes, '/distci/tasks')
+        else:
+            data_conn = sync.FSData(self._data_dir())
+
+        task_data = data_conn.get('/%s' % task_id)
+        if task_data is None:
+            return webob.Response(status=404, body=constants.ERROR_TASK_NOT_FOUND)
+
         try:
-            new_task_description = json.loads(request.read_request_data(environ))
+            new_task_description = json.load(request.body_file)
         except ValueError:
             self.log.error("Decoding task data failed '%s'" % task_id)
-            return response.send_error(start_response, 400, constants.ERROR_TASK_INVALID_PAYLOAD)
-        if self.zknodes:
-            lock = distlocks.ZooKeeperLock(self.zknodes, 'task-lock-%s' % task_id)
-            if lock.try_lock() != True:
-                lock.close()
-                self.log.debug("Task locked '%s'" % task_id)
-                return response.send_response(start_response, 409, constants.ERROR_TASK_LOCKED)
-        else:
-            lock = None
+            data_conn.close()
+            return webob.Response(status=400, body=constants.ERROR_TASK_INVALID_PAYLOAD)
         try:
-            old_task_description = self._load_task_config(task_id)
+            old_task_description = json.loads(task_data)
         except:
-            if lock:
-                lock.unlock()
-                lock.close()
             self.log.error("Failed to read task data '%s'" % task_id)
-            return response.send_response(start_response, 500)
+            data_conn.close()
+            return webob.Response(status=500)
         if old_task_description.has_key('assignee') and new_task_description.has_key('assignee') and old_task_description['assignee'] != new_task_description['assignee']:
-            if lock:
-                lock.unlock()
-                lock.close()
-            self.log.debug("Task assignment conflict '%s'" % task_id)
-            return response.send_response(start_response, 409, constants.ERROR_TASK_WRONG_ACTOR)
-        self._save_task_config(task_id, new_task_description)
-        if lock:
-            lock.unlock()
-            lock.close()
-        return response.send_response(start_response, 200, json.dumps({'id': task_id, 'data': new_task_description}))
+            data_conn.close()
+            self.log.info("Task assignment conflict '%s'" % task_id)
+            return webob.Response(status=409, body=constants.ERROR_TASK_WRONG_ACTOR)
+        if data_conn.set('/%s' % task_id, json.dumps(new_task_description), task_data) == False:
+            data_conn.close()
+            return webob.Response(status=409, body=constants.ERROR_TASK_LOCKED)
 
-    def handle_request(self, environ, start_response, method, parts):
+        data_conn.close()
+        return webob.Response(status=200, body=json.dumps({'id': task_id, 'data': new_task_description}), content_type="application/json")
+
+    def handle_request(self, request, parts):
         """ Parse and dispatch task API requests """
-        self.log.debug('%s %r' % (method, parts))
         if len(parts) == 0:
-            if method == 'GET':
-                retval = self.get_tasks(start_response)
-            elif method == 'POST':
-                retval = self.create_new_task(environ, start_response)
-            else:
-                retval = response.send_error(start_response, 400)
+            if request.method == 'GET':
+                return self.get_tasks()
+            elif request.method == 'POST':
+                return self.create_new_task(request)
         elif len(parts) == 1:
-            if method == 'GET':
-                retval = self.get_task(start_response, parts[0])
-            elif method == 'PUT':
-                retval = self.update_task(environ, start_response, parts[0])
-            elif method == 'DELETE':
-                retval = self.delete_task(start_response, parts[0])
-            else:
-                retval = response.send_error(start_response, 400)
-        else:
-            retval = response.send_error(start_response, 400)
-        return retval
+            if validators.validate_task_id(parts[0]) != parts[0]:
+                return webob.Response(status=400, body=constants.ERROR_TASK_INVALID_ID)
+
+            if request.method == 'GET':
+                return self.get_task(parts[0])
+            elif request.method == 'PUT':
+                return self.update_task(request, parts[0])
+            elif request.method == 'DELETE':
+                return self.delete_task(parts[0])
+
+        return webob.Response(status=400)
 

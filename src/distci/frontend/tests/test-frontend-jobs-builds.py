@@ -178,3 +178,19 @@ class TestJobsBuilds:
         request.method = 'DELETE'
         _ = self.app.do_request(request, 204, False)
 
+    def test_11_github_webhook(self):
+        response = self.app.post('/jobs/%s/github-webhook' % self.test_state['job_id'], {'payload': json.dumps({'ref':'refs/heads/master'})})
+        result = json.loads(response.body)
+        assert result.has_key('job_id'), "ID entry went missing"
+        assert result.has_key('build_number'), "build_number went missing"
+
+    def test_12_github_webhook_negative(self):
+        request = TestRequest.blank('/jobs/%s/github-webhook' % self.test_state['job_id'])
+        request.method = 'POST'
+        request.body = 'unexpected content'
+        _response = self.app.do_request(request, 400, True)
+        request = TestRequest.blank('/jobs/%s/github-webhook' % self.test_state['job_id'])
+        request.method = 'POST'
+        request.body = json.dumps({'ref': 'refs/heads/wrongbranch'})
+        _response = self.app.do_request(request, 400, True)
+
