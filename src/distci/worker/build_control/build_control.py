@@ -14,6 +14,7 @@ import tempfile
 import copy
 
 from distci.worker import worker_base, task_base
+from distci import distcilib
 
 class BuildControlWorker(worker_base.WorkerBase):
     """ Build control worker """
@@ -21,6 +22,7 @@ class BuildControlWorker(worker_base.WorkerBase):
         worker_base.WorkerBase.__init__(self, config)
         self.worker_config['capabilities'] = ['build_control_v1']
         self.build_states = {}
+        self.distci_client = distcilib.DistCIClient(config)
 
     def update_build_state(self, task_key):
         self.build_states[task_key]['last_updated'] = int(time.time())
@@ -155,6 +157,11 @@ class BuildControlWorker(worker_base.WorkerBase):
                 break
         if task.id is not None:
             return
+
+        # trigger downstream jobs
+        if self.build_states[task_key]['build_state'].get('result') == 'success':
+            for job in self.build_states[task_key]['job_config'].get('downstream_jobs'):
+                self.distci_client.builds.trigger(job)
 
         self.build_states[task_key]['state'] = 'reported'
 
