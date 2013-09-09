@@ -160,7 +160,7 @@ class BuildControlWorker(worker_base.WorkerBase):
 
         # trigger downstream jobs
         if self.build_states[task_key]['build_state'].get('result') == 'success':
-            for job in self.build_states[task_key]['job_config'].get('downstream_jobs'):
+            for job in self.build_states[task_key]['job_config'].get('downstream_jobs', []):
                 self.distci_client.builds.trigger(job)
 
         self.build_states[task_key]['state'] = 'reported'
