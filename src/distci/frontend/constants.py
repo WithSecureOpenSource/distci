@@ -24,3 +24,5 @@ ERROR_ARTIFACT_NOT_FOUND       = 'Artifact not found'
 ERROR_ARTIFACT_READ_FAILED     = 'Read error'
 ERROR_ARTIFACT_WRITE_FAILED    = 'Write error'
 
+ERROR_INTERNAL                 = 'Internal Error'
+
