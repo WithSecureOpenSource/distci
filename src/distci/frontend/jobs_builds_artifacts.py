@@ -11,12 +11,14 @@ import os
 import json
 import webob
 
-from distci.frontend import validators, constants
+from distci.frontend import validators, constants, storage
 
 class JobsBuildsArtifacts(object):
+    """ Class for handling build artifact related requests """
     def __init__(self, config):
         self.config = config
         self.log = logging.getLogger('jobs_builds_artifacts')
+        self.cephmonitors = config.get('ceph_monitors')
 
     def _job_dir(self, job_id):
         """ Return directory for a specific job """
@@ -36,66 +38,90 @@ class JobsBuildsArtifacts(object):
 
     def create_or_update_artifact(self, request, job_id, build_id, artifact_id_param = None):
         """ Create or update an artifact """
-        if artifact_id_param is not None:
-            artifact_id = artifact_id_param
-            if validators.validate_artifact_id(artifact_id) != artifact_id:
-                return webob.Response(status=400, body=constants.ERROR_ARTIFACT_INVALID_ID)
-            if not os.path.isfile(self._build_artifact_file(job_id, build_id, artifact_id)):
-                return webob.Response(status=404, body=constants.ERROR_ARTIFACT_NOT_FOUND)
+        if self.cephmonitors:
+            storage_backend = storage.CephFSStorage(','.join(self.cephmonitors))
         else:
-            artifact_id = str(uuid.uuid4())
+            storage_backend = storage.LocalFSStorage()
+        with storage_backend as store:
+            if artifact_id_param is not None:
+                artifact_id = artifact_id_param
+                if not store.isfile(self._build_artifact_file(job_id, build_id, artifact_id)):
+                    return webob.Response(status=404, body=constants.ERROR_ARTIFACT_NOT_FOUND)
+            else:
+                artifact_id = str(uuid.uuid4())
 
-        if not os.path.isdir(self._build_artifact_dir(job_id, build_id)):
+            if not store.isdir(self._build_artifact_dir(job_id, build_id)):
+                try:
+                    store.mkdir(self._build_artifact_dir(job_id, build_id))
+                except storage.ObjectExists:
+                    pass
+                except:
+                    self.log.exception("Exception while creating artifact directory")
+                    return webob.Response(status=400, body=constants.ERROR_ARTIFACT_WRITE_FAILED)
+
+            data_len = request.content_length
+            ifh = request.body_file
+
             try:
-                os.mkdir(self._build_artifact_dir(job_id, build_id))
-            except IOError:
+                ofh = store.open(self._build_artifact_file(job_id, build_id, artifact_id), 'wb')
+            except:
+                self.log.exception("Exception while storing artifact")
                 return webob.Response(status=400, body=constants.ERROR_ARTIFACT_WRITE_FAILED)
 
-        data_len = request.content_length
-        ifh = request.body_file
+            try:
+                while data_len > 0:
+                    read_len = data_len
+                    if read_len > 1024*128:
+                        read_len = 1024*128
+                    data = ifh.read(read_len)
+                    ofh.write(data)
+                    data_len = data_len - len(data)
+            except:
+                self.log.exception("Exception while writing artifact")
+                ofh.close()
+                return webob.Response(status=400, body=constants.ERROR_ARTIFACT_WRITE_FAILED)
 
-        try:
-            ofh = open(self._build_artifact_file(job_id, build_id, artifact_id), 'wb')
-        except IOError:
-            return webob.Response(status=400, body=constants.ERROR_ARTIFACT_WRITE_FAILED)
-
-        try:
-            while data_len > 0:
-                read_len = data_len
-                if read_len > 1024*128:
-                    read_len = 1024*128
-                data = ifh.read(read_len)
-                ofh.write(data)
-                data_len = data_len - len(data)
-        except IOError:
             ofh.close()
-            return webob.Response(status=400, body=constants.ERROR_ARTIFACT_WRITE_FAILED)
-
-        ofh.close()
 
         return webob.Response(status=200 if artifact_id_param else 201, body=json.dumps({'job_id': job_id, 'build_number': int(build_id), 'artifact_id': artifact_id}), content_type="application/json")
 
     def get_artifact(self, job_id, build_id, artifact_id):
         """ Get artifact data """
-        if not os.path.isfile(self._build_artifact_file(job_id, build_id, artifact_id)):
-            return webob.Response(status=404, body=constants.ERROR_ARTIFACT_NOT_FOUND)
-        try:
-            ifh = open(self._build_artifact_file(job_id, build_id, artifact_id))
-        except IOError:
-            return webob.Response(status=400, body=constants.ERROR_ARTIFACT_READ_FAILED)
+        if self.cephmonitors:
+            storage_backend = storage.CephFSStorage(','.join(self.cephmonitors))
+        else:
+            storage_backend = storage.LocalFSStorage()
+        with storage_backend as store:
+            if not store.isfile(self._build_artifact_file(job_id, build_id, artifact_id)):
+                return webob.Response(status=404, body=constants.ERROR_ARTIFACT_NOT_FOUND)
+            try:
+                ifh = store.open(self._build_artifact_file(job_id, build_id, artifact_id), 'rb')
+            except storage.NotFound:
+                return webob.Response(status=400, body=constants.ERROR_ARTIFACT_READ_FAILED)
+            except:
+                self.log.exception("Exception while getting artifact")
+                return webob.Response(status=500, body=constants.ERROR_ARTIFACT_READ_FAILED)
 
-        file_len = os.path.getsize(self._build_artifact_file(job_id, build_id, artifact_id))
+            file_len = store.getsize(self._build_artifact_file(job_id, build_id, artifact_id))
 
         return webob.Response(status=200, body_file=ifh, content_length=file_len)
 
     def delete_artifact(self, job_id, build_id, artifact_id):
         """ Delete artifact """
-        if not os.path.isfile(self._build_artifact_file(job_id, build_id, artifact_id)):
-            return webob.Response(status=404, body=constants.ERROR_ARTIFACT_NOT_FOUND)
-        try:
-            os.unlink(self._build_artifact_file(job_id, build_id, artifact_id))
-        except IOError:
-            return webob.Response(status=400, body=constants.ERROR_ARTIFACT_WRITE_FAILED)
+        if self.cephmonitors:
+            storage_backend = storage.CephFSStorage(','.join(self.cephmonitors))
+        else:
+            storage_backend = storage.LocalFSStorage()
+        with storage_backend as store:
+            if not store.isfile(self._build_artifact_file(job_id, build_id, artifact_id)):
+                return webob.Response(status=404, body=constants.ERROR_ARTIFACT_NOT_FOUND)
+            try:
+                store.unlink(self._build_artifact_file(job_id, build_id, artifact_id))
+            except storage.NotFound:
+                return webob.Response(status=404, body=constants.ERROR_ARTIFACT_NOT_FOUND)
+            except:
+                self.log.exception("Exception while deleting artifact")
+                return webob.Response(status=500, body=constants.ERROR_ARTIFACT_WRITE_FAILED)
 
         return webob.Response(status=204)
 

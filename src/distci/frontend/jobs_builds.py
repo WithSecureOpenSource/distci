@@ -9,10 +9,9 @@ import os
 import json
 import logging
 import time
-import shutil
 import webob
 
-from distci.frontend import validators, jobs_builds_artifacts, sync, constants
+from distci.frontend import validators, jobs_builds_artifacts, sync, constants, storage
 
 from distci import distcilib
 
@@ -21,9 +20,8 @@ class JobsBuilds(object):
     def __init__(self, config):
         self.config = config
         self.log = logging.getLogger('jobs_builds')
-        self.zknodes = config.get('zookeeper_nodes', [])
-        if len(self.zknodes) == 0:
-            self.zknodes = None
+        self.zknodes = config.get('zookeeper_nodes')
+        self.cephmonitors = config.get('ceph_monitors')
         self.jobs_builds_artifacts = jobs_builds_artifacts.JobsBuildsArtifacts(config)
         self.distci_client = distcilib.DistCIClient(config)
 
@@ -47,10 +45,10 @@ class JobsBuilds(object):
         """ Return filename for a build console log """
         return os.path.join(self._build_dir(job_id, build_id), 'console.log')
 
-    def _get_build_numbers(self, job_id):
+    def _get_build_numbers(self, store, job_id):
         """ Return all builds for given job """
         build_ids = []
-        build_id_candidates = os.listdir(self._job_dir(job_id))
+        build_id_candidates = store.listdir(self._job_dir(job_id))
         for build_id_candidate in build_id_candidates:
             try:
                 build_number = int(build_id_candidate)
@@ -61,7 +59,14 @@ class JobsBuilds(object):
 
     def get_builds(self, job_id):
         """ Return all builds for a specific job """
-        result = { 'builds': self._get_build_numbers(job_id) }
+        if self.cephmonitors:
+            storage_backend = storage.CephFSStorage(','.join(self.cephmonitors))
+        else:
+            storage_backend = storage.LocalFSStorage()
+        with storage_backend as store:
+            if not store.isdir(self._job_dir(job_id)):
+                return webob.Response(status=404, body=constants.ERROR_BUILD_NOT_FOUND)
+            result = { 'builds': self._get_build_numbers(store, job_id) }
         if len(result['builds']) > 0:
             result['last_build_number'] = max(result['builds'])
         return webob.Response(status=200, body=json.dumps(result), content_type="application/json")
@@ -77,31 +82,39 @@ class JobsBuilds(object):
             self.log.info("Job locked '%s'" % job_id)
             return webob.Response(status=400, body=constants.ERROR_JOB_LOCKED)
 
-        build_ids = self._get_build_numbers(job_id)
-        if len(build_ids) > 0:
-            new_build_number = str(max(build_ids) + 1)
+        if self.cephmonitors:
+            storage_backend = storage.CephFSStorage(','.join(self.cephmonitors))
         else:
-            new_build_number = "1"
+            storage_backend = storage.LocalFSStorage()
+        with storage_backend as store:
+            if not store.isdir(self._job_dir(job_id)):
+                return webob.Response(status=404, body=constants.ERROR_BUILD_NOT_FOUND)
+            build_ids = self._get_build_numbers(store, job_id)
+            if len(build_ids) > 0:
+                new_build_number = str(max(build_ids) + 1)
+            else:
+                new_build_number = "1"
 
-        try:
-            os.mkdir(self._build_dir(job_id, new_build_number))
-        except OSError:
+            try:
+                store.mkdir(self._build_dir(job_id, new_build_number))
+            except:
+                self.log.exception("Build directory creation failed")
+                if lock:
+                    lock.unlock()
+                    lock.close()
+                return webob.Response(status=500, body=constants.ERROR_BUILD_CREATE_FAILED)
+
             if lock:
                 lock.unlock()
                 lock.close()
-            self.log.error("Build directory creation failed")
-            return webob.Response(status=500, body=constants.ERROR_BUILD_CREATE_FAILED)
 
-        if lock:
-            lock.unlock()
-            lock.close()
-
-        build_state = { "status": "preparing" }
-        try:
-            file(self._build_state_file(job_id, new_build_number), 'wb').write(json.dumps(build_state))
-        except IOError:
-            self.log.error('Failed to write build state, job_id %s, build %s', job_id, new_build_number)
-            return webob.Response(status=500, body=constants.ERROR_BUILD_WRITE_FAILED)
+            build_state = { "status": "preparing" }
+            try:
+                with store.open(self._build_state_file(job_id, new_build_number), 'wb') as fileo:
+                    json.dump(build_state, fileo)
+            except:
+                self.log.exception('Failed to write build state, job_id %s, build %s', job_id, new_build_number)
+                return webob.Response(status=500, body=constants.ERROR_BUILD_WRITE_FAILED)
 
         if self.config.get('task_frontends'):
             for _ in range(10):
@@ -134,16 +147,25 @@ class JobsBuilds(object):
         """ Get job state """
         if validators.validate_build_id(build_id) != build_id:
             return webob.Response(status=400, body=constants.ERROR_BUILD_INVALID_ID)
-        if not os.path.isdir(self._build_dir(job_id, build_id)):
-            return webob.Response(status=404, body=constants.ERROR_JOB_NOT_FOUND)
+        if self.cephmonitors:
+            storage_backend = storage.CephFSStorage(','.join(self.cephmonitors))
+        else:
+            storage_backend = storage.LocalFSStorage()
         build_data = None
-        for _ in range(10):
-            try:
-                build_state = json.load(file(self._build_state_file(job_id, build_id), 'rb'))
-                build_data = json.dumps({'job_id': job_id, 'build_number': build_id, 'state': build_state})
-                break
-            except (OSError, ValueError):
-                time.sleep(0.1)
+        with storage_backend as store:
+            if not store.isdir(self._build_dir(job_id, build_id)):
+                return webob.Response(status=404, body=constants.ERROR_JOB_NOT_FOUND)
+            for _ in range(10):
+                try:
+                    with store.open(self._build_state_file(job_id, build_id), 'rb') as fileo:
+                        build_state = json.load(fileo)
+                    build_data = json.dumps({'job_id': job_id, 'build_number': build_id, 'state': build_state})
+                    break
+                except (storage.NotFound, ValueError):
+                    time.sleep(0.1)
+                except:
+                    self.log.exception("Exception while reading build state")
+                    return webob.Response(status=500, body=constants.ERROR_INTERNAL)
         if not build_data:
             return webob.Response(status=409, body=constants.ERROR_BUILD_LOCKED)
         return webob.Response(status=200, body=build_data, content_type="application/json")
@@ -153,19 +175,25 @@ class JobsBuilds(object):
         try:
             build_state = json.load(request.body_file)
         except ValueError:
-            self.log.error('Failed to load build state')
+            self.log.exception('Failed to load build state')
             return webob.Response(status=400, body=constants.ERROR_BUILD_INVALID_PAYLOAD)
         if validators.validate_build_id(build_id) != build_id:
             self.log.error("Build_id validation failure, '%s'", build_id)
             return webob.Response(status=400, body=constants.ERROR_BUILD_INVALID_ID)
-        if not os.path.isdir(self._build_dir(job_id, build_id)):
-            return webob.Response(status=404, body=constants.ERROR_BUILD_NOT_FOUND)
+        if self.cephmonitors:
+            storage_backend = storage.CephFSStorage(','.join(self.cephmonitors))
+        else:
+            storage_backend = storage.LocalFSStorage()
+        with storage_backend as store:
+            if not store.isdir(self._build_dir(job_id, build_id)):
+                return webob.Response(status=404, body=constants.ERROR_BUILD_NOT_FOUND)
 
-        try:
-            file(self._build_state_file(job_id, build_id), 'wb').write(json.dumps(build_state))
-        except IOError:
-            self.log.error('Failed to write build state, job_id %s, build %s', job_id, build_id)
-            return webob.Response(status=500, body=constants.ERROR_BUILD_WRITE_FAILED)
+            try:
+                with store.open(self._build_state_file(job_id, build_id), 'wb') as fileo:
+                    json.dump(build_state, fileo)
+            except:
+                self.log.exception('Failed to write build state, job_id %s, build %s', job_id, build_id)
+                return webob.Response(status=500, body=constants.ERROR_BUILD_WRITE_FAILED)
 
         return webob.Response(status=200, body=json.dumps({'job_id': job_id, 'build_number': int(build_id), 'state': build_state}), content_type="application/json")
 
@@ -174,14 +202,22 @@ class JobsBuilds(object):
         if validators.validate_build_id(build_id) != build_id:
             self.log.error("Build_id validation failure, '%s'", build_id)
             return webob.Response(status=400, body=constants.ERROR_BUILD_INVALID_ID)
-        if not os.path.isdir(self._build_dir(job_id, build_id)):
-            return webob.Response(status=404, body=constants.ERROR_BUILD_NOT_FOUND)
+        if self.cephmonitors:
+            storage_backend = storage.CephFSStorage(','.join(self.cephmonitors))
+        else:
+            storage_backend = storage.LocalFSStorage()
         console_log = ''
-        try:
-            console_log = file(self._console_log_file(job_id, build_id), 'rb').read()
-        except IOError:
-            # can be ignored, we just return empty log
-            pass
+        with storage_backend as store:
+            if not store.isdir(self._build_dir(job_id, build_id)):
+                return webob.Response(status=404, body=constants.ERROR_BUILD_NOT_FOUND)
+            try:
+                with store.open(self._console_log_file(job_id, build_id), 'rb') as fileo:
+                    console_log = fileo.read()
+            except storage.NotFound:
+                # can be ignored, we just return empty log
+                pass
+            except:
+                self.log.exception("Exception while reading console log")
         return webob.Response(status=200, body=console_log, content_type="text/plain")
 
     def update_console_log(self, request, job_id, build_id):
@@ -189,15 +225,21 @@ class JobsBuilds(object):
         if validators.validate_build_id(build_id) != build_id:
             self.log.error("Build_id validation failure, '%s'", build_id)
             return webob.Response(status=400, body=constants.ERROR_BUILD_INVALID_ID)
-        if not os.path.isdir(self._build_dir(job_id, build_id)):
-            return webob.Response(status=404, body=constants.ERROR_BUILD_NOT_FOUND)
+        if self.cephmonitors:
+            storage_backend = storage.CephFSStorage(','.join(self.cephmonitors))
+        else:
+            storage_backend = storage.LocalFSStorage()
+        with storage_backend as store:
+            if not store.isdir(self._build_dir(job_id, build_id)):
+                return webob.Response(status=404, body=constants.ERROR_BUILD_NOT_FOUND)
 
-        try:
-            log = request.body_file.read()
-            file(self._console_log_file(job_id, build_id), 'ab').write(log)
-        except IOError:
-            # can be ignored, we just return empty log
-            pass
+            try:
+                log = request.body_file.read()
+                with store.open(self._console_log_file(job_id, build_id), 'ab') as fileo:
+                    fileo.write(log)
+            except:
+                self.log.exception("Exception while updating console log")
+                # FIXME: ignored for now
         return webob.Response(status=204)
 
     def update_workspace(self, request, job_id, build_id):
@@ -205,30 +247,37 @@ class JobsBuilds(object):
         if validators.validate_build_id(build_id) != build_id:
             self.log.error("Build_id validation failure, '%s'", build_id)
             return webob.Response(status=400, body=constants.ERROR_BUILD_INVALID_ID)
-        if not os.path.isdir(self._build_dir(job_id, build_id)):
-            return webob.Response(status=404, body=constants.ERROR_BUILD_NOT_FOUND)
+        if self.cephmonitors:
+            storage_backend = storage.CephFSStorage(','.join(self.cephmonitors))
+        else:
+            storage_backend = storage.LocalFSStorage()
+        with storage_backend as store:
+            if not store.isdir(self._build_dir(job_id, build_id)):
+                return webob.Response(status=404, body=constants.ERROR_BUILD_NOT_FOUND)
 
-        data_len = request.content_length
-        ifh = request.body_file
+            data_len = request.content_length
+            ifh = request.body_file
 
-        try:
-            ofh = open(self._build_workspace_file(job_id, build_id), 'wb')
-        except IOError:
-            return webob.Response(status=500, body=constants.ERROR_BUILD_WRITE_FAILED)
+            try:
+                ofh = store.open(self._build_workspace_file(job_id, build_id), 'wb')
+            except:
+                self.log.exception("Failed to open workspace for writing")
+                return webob.Response(status=500, body=constants.ERROR_BUILD_WRITE_FAILED)
 
-        try:
-            while data_len > 0:
-                read_len = data_len
-                if read_len > 1024*128:
-                    read_len = 1024*128
-                data = ifh.read(read_len)
-                ofh.write(data)
-                data_len = data_len - len(data)
-        except IOError:
+            try:
+                while data_len > 0:
+                    read_len = data_len
+                    if read_len > 1024*128:
+                        read_len = 1024*128
+                    data = ifh.read(read_len)
+                    ofh.write(data)
+                    data_len = data_len - len(data)
+            except:
+                self.log.exception("Exception while updating workspace")
+                ofh.close()
+                return webob.Response(status=500, body=constants.ERROR_BUILD_WRITE_FAILED)
+
             ofh.close()
-            return webob.Response(status=500, body=constants.ERROR_BUILD_WRITE_FAILED)
-
-        ofh.close()
 
         return webob.Response(status=204)
 
@@ -237,15 +286,23 @@ class JobsBuilds(object):
         if validators.validate_build_id(build_id) != build_id:
             self.log.error("Build_id validation failure, '%s'", build_id)
             return webob.Response(status=400, body=constants.ERROR_BUILD_INVALID_ID)
-        if not os.path.isfile(self._build_workspace_file(job_id, build_id)):
-            return webob.Response(status=404, body=constants.ERROR_BUILD_NOT_FOUND)
+        if self.cephmonitors:
+            storage_backend = storage.CephFSStorage(','.join(self.cephmonitors))
+        else:
+            storage_backend = storage.LocalFSStorage()
+        with storage_backend as store:
+            if not store.isfile(self._build_workspace_file(job_id, build_id)):
+                return webob.Response(status=404, body=constants.ERROR_BUILD_NOT_FOUND)
 
-        try:
-            ifh = open(self._build_workspace_file(job_id, build_id))
-        except IOError:
-            return webob.Response(status=500, body=constants.ERROR_BUILD_READ_FAILED)
+            try:
+                ifh = store.open(self._build_workspace_file(job_id, build_id), 'rb')
+            except storage.NotFound:
+                return webob.Response(status=500, body=constants.ERROR_BUILD_READ_FAILED)
+            except:
+                self.log.exception("Exception in get workspace")
+                return webob.Response(status=500, body=constants.ERROR_BUILD_READ_FAILED)
 
-        file_len = os.path.getsize(self._build_workspace_file(job_id, build_id))
+            file_len = store.getsize(self._build_workspace_file(job_id, build_id))
 
         return webob.Response(status=200, body_file=ifh, content_length=file_len, content_type="application/octet-stream")
 
@@ -254,13 +311,21 @@ class JobsBuilds(object):
         if validators.validate_build_id(build_id) != build_id:
             self.log.error("Build_id validation failure, '%s'", build_id)
             return webob.Response(status=400, body=constants.ERROR_BUILD_INVALID_ID)
-        if not os.path.isfile(self._build_workspace_file(job_id, build_id)):
-            return webob.Response(status=404, body=constants.ERROR_BUILD_NOT_FOUND)
+        if self.cephmonitors:
+            storage_backend = storage.CephFSStorage(','.join(self.cephmonitors))
+        else:
+            storage_backend = storage.LocalFSStorage()
+        with storage_backend as store:
+            if not store.isfile(self._build_workspace_file(job_id, build_id)):
+                return webob.Response(status=404, body=constants.ERROR_BUILD_NOT_FOUND)
 
-        try:
-            os.unlink(self._build_workspace_file(job_id, build_id))
-        except IOError:
-            return webob.Response(status=500, body=constants.ERROR_BUILD_WRITE_FAILED)
+            try:
+                store.unlink(self._build_workspace_file(job_id, build_id))
+            except storage.NotFound:
+                return webob.Response(status=500, body=constants.ERROR_BUILD_WRITE_FAILED)
+            except:
+                self.log.exception("Exception while deleting workspace")
+                return webob.Response(status=500, body=constants.ERROR_BUILD_WRITE_FAILED)
 
         return webob.Response(status=204)
 
@@ -269,12 +334,20 @@ class JobsBuilds(object):
         if validators.validate_build_id(build_id) != build_id:
             self.log.error("Build_id validation failure, '%s'", build_id)
             return webob.Response(status=400, body=constants.ERROR_BUILD_INVALID_ID)
-        if not os.path.isdir(self._build_dir(job_id, build_id)):
-            return webob.Response(status=404, body=constants.ERROR_BUILD_NOT_FOUND)
-        try:
-            shutil.rmtree(self._build_dir(job_id, build_id))
-        except OSError:
-            return webob.Response(status=404, body=constants.ERROR_BUILD_NOT_FOUND)
+        if self.cephmonitors:
+            storage_backend = storage.CephFSStorage(','.join(self.cephmonitors))
+        else:
+            storage_backend = storage.LocalFSStorage()
+        with storage_backend as store:
+            if not store.isdir(self._build_dir(job_id, build_id)):
+                return webob.Response(status=404, body=constants.ERROR_BUILD_NOT_FOUND)
+            try:
+                store.rmtree(self._build_dir(job_id, build_id))
+            except storage.NotFound:
+                return webob.Response(status=204)
+            except:
+                self.log.exception("Exception on delete build")
+                return webob.Response(status=404, body=constants.ERROR_BUILD_NOT_FOUND)
         return webob.Response(status=204)
 
     def handle_request(self, request, job_id, parts):
@@ -282,8 +355,6 @@ class JobsBuilds(object):
         if validators.validate_job_id(job_id) == None:
             self.log.error('Invalid job_id: %r' % job_id)
             return webob.Response(status=400, body=constants.ERROR_JOB_INVALID_ID)
-        if not os.path.isdir(self._job_dir(job_id)):
-            return webob.Response(status=404, body=constants.ERROR_BUILD_NOT_FOUND)
 
         if len(parts) == 0:
             if request.method == 'GET':
