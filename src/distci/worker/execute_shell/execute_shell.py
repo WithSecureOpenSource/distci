@@ -25,166 +25,172 @@ class ExecuteShellWorker(worker_base.WorkerBase):
             self.worker_config['capabilities'].append('nodelabel_%s' % label)
         self.distci_client = distcilib.DistCIClient(config)
 
-        self.state = {}
+        self.tasks = {}
         self.log.debug('Starting with capabilities: %r', self.worker_config['capabilities'])
 
-    def get_workspace(self):
+    def get_workspace(self, task_id):
         """ fetch workspace """
-        self.log.debug('Fetching workspace')
-        self.state['workspace'] = self.fetch_workspace(self.state['task'].config['job_id'], self.state['task'].config['build_number'])
-        return self.state['workspace'] is not None
+        self.log.debug('Fetching workspace for task %s', task_id)
+        self.tasks[task_id]['workspace'] = self.fetch_workspace(self.tasks[task_id]['task'].config['job_id'], self.tasks[task_id]['task'].config['build_number'])
+        return self.tasks[task_id]['workspace'] is not None
 
-    def start_script(self):
+    def start_script(self, task_id):
         """ launch the configured script """
-        self.log.debug('Launching build script')
+        self.log.debug('Launching build script for task %s', task_id)
         # write out script to execute
         (script_handle, script_name) = tempfile.mkstemp()
         os.close(script_handle)
         fileh = open(script_name, 'wb')
-        fileh.write(self.state['task'].config['params']['script'])
+        fileh.write(self.tasks[task_id]['task'].config['params']['script'])
         fileh.close()
 
-        self.state['script_name'] = script_name
+        self.tasks[task_id]['script_name'] = script_name
 
-        self.state['start_timestamp'] = time.time()
+        self.tasks[task_id]['start_timestamp'] = time.time()
 
         # execute
-        if self.state['task'].config['params'].get('working_directory'):
-            wdir = os.path.join(self.state['workspace'], self.state['task'].config['params']['working_directory'])
+        if self.tasks[task_id]['task'].config['params'].get('working_directory'):
+            wdir = os.path.join(self.tasks[task_id]['workspace'], self.tasks[task_id]['task'].config['params']['working_directory'])
         else:
-            wdir = self.state['workspace']
+            wdir = self.tasks[task_id]['workspace']
 
         cmd_and_args = [ "sh", script_name ]
         env = os.environ.copy()
-        env['JOB_NAME'] = self.state['task'].config['job_id']
-        env['BUILD_NUMBER'] = self.state['task'].config['build_number']
-        env['WORKSPACE'] = self.state['workspace']
+        env['JOB_NAME'] = self.tasks[task_id]['task'].config['job_id']
+        env['BUILD_NUMBER'] = self.tasks[task_id]['task'].config['build_number']
+        env['WORKSPACE'] = self.tasks[task_id]['workspace']
         console_log_fd, console_log_name = tempfile.mkstemp()
-        self.state['console_output'] = { 'in': os.fdopen(console_log_fd),
-                                         'out': open(console_log_name, 'rb'),
-                                         'name': console_log_name }
-        self.state['proc'] = subprocess.Popen(cmd_and_args, cwd=wdir, stdout=self.state['console_output']['in'], stderr=subprocess.STDOUT, env=env, preexec_fn=os.setpgrp, bufsize=1)
+        self.tasks[task_id]['console_output'] = {
+                'in': os.fdopen(console_log_fd),
+                'out': open(console_log_name, 'rb'),
+                'name': console_log_name
+            }
+        self.tasks[task_id]['proc'] = subprocess.Popen(cmd_and_args, cwd=wdir, stdout=self.tasks[task_id]['console_output']['in'], stderr=subprocess.STDOUT, env=env, preexec_fn=os.setpgrp, bufsize=1)
 
-        self.log.debug('Build script PID %d', self.state['proc'].pid)
+        self.log.debug('Build script PID %d', self.tasks[task_id]['proc'].pid)
 
         return True
 
-    def push_console_log(self):
+    def push_console_log(self, task_id):
         """ send and clear console log buffer """
-        if len(self.state['log']) > 0:
-            if self.distci_client.builds.console.append(self.state['task'].config['job_id'],
-                                                        self.state['task'].config['build_number'],
-                                                        self.state['log']) == True:
-                self.state['log'] = ''
+        if len(self.tasks[task_id]['log']) > 0:
+            if self.distci_client.builds.console.append(self.tasks[task_id]['task'].config['job_id'],
+                                                        self.tasks[task_id]['task'].config['build_number'],
+                                                        self.tasks[task_id]['log']) == True:
+                self.tasks[task_id]['log'] = ''
             else:
-                self.log.error('Console log submit failed')
+                self.log.error('Console log submit failed for task %s', task_id)
                 return False
         return True
 
-    def watch_process(self):
+    def watch_process(self, task_id):
         """ check output and status of a running background process """
-        retcode = self.state['proc'].poll()
-        self.log.debug('Watch process, retcode %r', retcode)
+        retcode = self.tasks[task_id]['proc'].poll()
+        self.log.debug('Watch process for task %s, retcode %r', task_id, retcode)
 
-        console_output_len = self.state['console_output']['in'].tell() - self.state['console_output']['out'].tell()
+        console_output_len = self.tasks[task_id]['console_output']['in'].tell() - self.tasks[task_id]['console_output']['out'].tell()
         if console_output_len > 0:
             try:
-                output = self.state['console_output']['out'].read(console_output_len)
-                self.state['log'] = '%s%s' % (self.state['log'], output.decode('utf-8').encode('ascii', 'replace'))
+                output = self.tasks[task_id]['console_output']['out'].read(console_output_len)
+                self.tasks[task_id]['log'] = '%s%s' % (self.tasks[task_id]['log'], output.decode('utf-8').encode('ascii', 'replace'))
             except:
                 self.log.exception('Console output decoding/encoding error')
-        self.push_console_log()
+        self.push_console_log(task_id)
         if retcode is not None:
-            self.state['console_output']['in'].close()
-            self.state['console_output']['out'].close()
-            os.unlink(self.state['console_output']['name'])
+            self.tasks[task_id]['console_output']['in'].close()
+            self.tasks[task_id]['console_output']['out'].close()
+            os.unlink(self.tasks[task_id]['console_output']['name'])
 
             if retcode == 0:
-                self.state['task'].config['result'] = 'success'
+                self.tasks[task_id]['task'].config['result'] = 'success'
             else:
-                self.state['task'].config['result'] = 'failure'
-                self.state['task'].config['error'] = 'Executed script reported failure, exitcode %d' % retcode
+                self.tasks[task_id]['task'].config['result'] = 'failure'
+                self.tasks[task_id]['task'].config['error'] = 'Executed script reported failure, exitcode %d' % retcode
             return True
 
-        timeout = self.state['task'].config['params'].get('timeout')
+        timeout = self.tasks[task_id]['task'].config['params'].get('timeout')
         if timeout:
-            ttl = self.state['start_timestamp'] + timeout - time.time()
+            ttl = self.tasks[task_id]['start_timestamp'] + timeout - time.time()
             if ttl < -60.0:
-                self.state['log'] = '%s\nTimed out, killing process...' % self.state['log']
-                self.state['proc'].kill()
+                self.tasks[task_id]['log'] = '%s\nTimed out, killing process...' % self.tasks[task_id]['log']
+                self.tasks[task_id]['proc'].kill()
             elif ttl < 0.0:
-                self.state['log'] = '%s\nTimed out, terminating...' % self.state['log']
-                self.state['proc'].terminate()
+                self.tasks[task_id]['log'] = '%s\nTimed out, terminating...' % self.tasks[task_id]['log']
+                self.tasks[task_id]['proc'].terminate()
         return False
 
-    def report_result(self):
+    def report_result(self, task_id):
         """ push all remaining artifacts back to repository """
-        self.log.debug('Reporting result')
+        self.log.debug('Reporting result for task %s', task_id)
         # delete temporary script
-        if self.state.get('script_name') is not None and os.path.isfile(self.state['script_name']):
-            os.unlink(self.state['script_name'])
-            self.state['script_name'] = None
+        if self.tasks[task_id].get('script_name') is not None and os.path.isfile(self.tasks[task_id]['script_name']):
+            os.unlink(self.tasks[task_id]['script_name'])
+            self.tasks[task_id]['script_name'] = None
             self.log.debug('Build script deleted')
 
         # flush console log
-        if self.push_console_log() == False:
+        if self.push_console_log(task_id) == False:
             return False
 
         # pack and upload workspace
-        if self.state.get('workspace') is not None:
+        if self.tasks[task_id].get('workspace') is not None:
             self.log.debug('Sending workspace')
-            if self.send_workspace(self.state['task'].config['job_id'],
-                                   self.state['task'].config['build_number'],
-                                   self.state.get('workspace')) == False:
+            if self.send_workspace(self.tasks[task_id]['task'].config['job_id'],
+                                   self.tasks[task_id]['task'].config['build_number'],
+                                   self.tasks[task_id]['workspace']) == False:
                 self.log.debug('Sending workspace failed')
                 return False
-            self.state['workspace'] = None
+            self.tasks[task_id]['workspace'] = None
 
         self.log.debug('Reporting complete')
         return True
 
-    def perform_step(self):
+    def perform_step(self, task_id):
         """ perform single step in state machine """
-        self.log.debug('Performing state %s for task %s', self.state['state'], self.state['task'].id)
-        if self.state['state'] == 'fetch-workspace' and self.get_workspace():
-            self.state['state'] = 'start'
+        self.log.debug('Performing state %s for task %s', self.tasks[task_id]['state'], task_id)
+        if self.tasks[task_id]['state'] == 'fetch-workspace' and self.get_workspace(task_id):
+            self.tasks[task_id]['state'] = 'start'
             return True
-        elif self.state['state'] == 'start' and self.start_script():
-            self.state['state'] = 'running'
+        elif self.tasks[task_id]['state'] == 'start' and self.start_script(task_id):
+            self.tasks[task_id]['state'] = 'running'
             return True
-        elif self.state['state'] == 'running' and self.watch_process():
-            self.state['state'] = 'reporting'
-        elif self.state['state'] == 'reporting' and self.report_result():
-            self.state['state'] = 'complete'
-            self.state['task'].config['status'] = 'complete'
+        elif self.tasks[task_id]['state'] == 'running' and self.watch_process(task_id):
+            self.tasks[task_id]['state'] = 'reporting'
             return True
-        elif self.state['state'] == 'complete':
-            if self.state['task'].config.get('assignee'):
-                del self.state['task'].config['assignee']
-            if self.update_task(self.state['task']) is not None:
+        elif self.tasks[task_id]['state'] == 'reporting' and self.report_result(task_id):
+            self.tasks[task_id]['state'] = 'complete'
+            self.tasks[task_id]['task'].config['status'] = 'complete'
+            return True
+        elif self.tasks[task_id]['state'] == 'complete':
+            if self.tasks[task_id]['task'].config.get('assignee'):
+                del self.tasks[task_id]['task'].config['assignee']
+            if self.update_task(self.tasks[task_id]['task']) is not None:
                 self.log.debug('Reported task as complete')
-                self.state['task'] = None
-                return True
+                del self.tasks[task_id]
         return False
 
     def start(self):
         """ main loop """
         while True:
-            task = self.state.get('task')
-            if task is None:
-                task = self.fetch_task(timeout=60)
-                if task is None:
-                    continue
-                self.state['task'] = task
-                self.state['state'] = 'fetch-workspace'
-                self.state['log'] = ''
+            progress_made = False
+            if len(self.tasks) < self.worker_config.get('executors', 1):
+                new_task = self.fetch_task(timeout=10)
+                if new_task:
+                    self.tasks[new_task.id] = {
+                            'task': new_task,
+                            'state': 'fetch-workspace',
+                            'log': ''
+                        }
+                    if not new_task.config.get('params') or not new_task.config['params'].get('script'):
+                        self.tasks[new_task.id]['state'] = 'complete'
+                        new_task.config['status'] = 'complete'
+                        new_task.config['result'] = 'failure'
+                        new_task.config['error'] = 'Script not specified'
 
-                if not task.config.get('params') or not task.config['params'].get('script'):
-                    self.state['state'] = 'complete'
-                    task.config['status'] = 'complete'
-                    task.config['result'] = 'failure'
-                    task.config['error'] = 'Script not specified'
+            for task_id in self.tasks.keys():
+                if self.perform_step(task_id):
+                    progress_made = True
 
-            if self.perform_step() == False:
+            if progress_made == False:
                 time.sleep(1)
 
