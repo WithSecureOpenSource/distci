@@ -32,7 +32,11 @@ class ExecuteShellWorker(worker_base.WorkerBase):
         """ fetch workspace """
         self.log.debug('Fetching workspace for task %s', task_id)
         self.tasks[task_id]['workspace'] = self.fetch_workspace(self.tasks[task_id]['task'].config['job_id'], self.tasks[task_id]['task'].config['build_number'])
-        return self.tasks[task_id]['workspace'] is not None
+        if self.tasks[task_id]['workspace']:
+            self.tasks[task_id]['state'] = 'start'
+            return True
+        else:
+            return False
 
     def start_script(self, task_id):
         """ launch the configured script """
@@ -65,10 +69,21 @@ class ExecuteShellWorker(worker_base.WorkerBase):
                 'out': open(console_log_name, 'rb'),
                 'name': console_log_name
             }
-        self.tasks[task_id]['proc'] = subprocess.Popen(cmd_and_args, cwd=wdir, stdout=self.tasks[task_id]['console_output']['in'], stderr=subprocess.STDOUT, env=env, preexec_fn=os.setpgrp, bufsize=1)
+        try:
+            self.tasks[task_id]['proc'] = subprocess.Popen(cmd_and_args, cwd=wdir, stdout=self.tasks[task_id]['console_output']['in'], stderr=subprocess.STDOUT, env=env, preexec_fn=os.setpgrp, bufsize=1)
+        except OSError, exc:
+            self.log.exception('Failed to launch script')
+            self.tasks[task_id]['task'].config['result'] = 'failure'
+            self.tasks[task_id]['task'].config['error'] = 'Failed to run the specified script'
+            self.tasks[task_id]['log'] = '%s\nFailed to run the specified script\n%s\n' % (self.tasks[task_id]['log'], str(exc))
+            self.tasks[task_id]['state'] = 'reporting'
+            self.tasks[task_id]['console_output']['in'].close()
+            self.tasks[task_id]['console_output']['out'].close()
+            os.unlink(self.tasks[task_id]['console_output']['name'])
+            return True
 
         self.log.debug('Build script PID %d', self.tasks[task_id]['proc'].pid)
-
+        self.tasks[task_id]['state'] = 'running'
         return True
 
     def push_console_log(self, task_id):
@@ -106,6 +121,7 @@ class ExecuteShellWorker(worker_base.WorkerBase):
             else:
                 self.tasks[task_id]['task'].config['result'] = 'failure'
                 self.tasks[task_id]['task'].config['error'] = 'Executed script reported failure, exitcode %d' % retcode
+            self.tasks[task_id]['state'] = 'reporting'
             return True
 
         timeout = self.tasks[task_id]['task'].config['params'].get('timeout')
@@ -143,30 +159,28 @@ class ExecuteShellWorker(worker_base.WorkerBase):
             self.tasks[task_id]['workspace'] = None
 
         self.log.debug('Reporting complete')
+        self.tasks[task_id]['state'] = 'complete'
+        self.tasks[task_id]['task'].config['status'] = 'complete'
         return True
 
     def perform_step(self, task_id):
         """ perform single step in state machine """
         self.log.debug('Performing state %s for task %s', self.tasks[task_id]['state'], task_id)
-        if self.tasks[task_id]['state'] == 'fetch-workspace' and self.get_workspace(task_id):
-            self.tasks[task_id]['state'] = 'start'
-            return True
-        elif self.tasks[task_id]['state'] == 'start' and self.start_script(task_id):
-            self.tasks[task_id]['state'] = 'running'
-            return True
-        elif self.tasks[task_id]['state'] == 'running' and self.watch_process(task_id):
-            self.tasks[task_id]['state'] = 'reporting'
-            return True
-        elif self.tasks[task_id]['state'] == 'reporting' and self.report_result(task_id):
-            self.tasks[task_id]['state'] = 'complete'
-            self.tasks[task_id]['task'].config['status'] = 'complete'
-            return True
+        if self.tasks[task_id]['state'] == 'fetch-workspace':
+            return self.get_workspace(task_id)
+        elif self.tasks[task_id]['state'] == 'start':
+            return self.start_script(task_id)
+        elif self.tasks[task_id]['state'] == 'running':
+            return self.watch_process(task_id)
+        elif self.tasks[task_id]['state'] == 'reporting':
+            return self.report_result(task_id)
         elif self.tasks[task_id]['state'] == 'complete':
             if self.tasks[task_id]['task'].config.get('assignee'):
                 del self.tasks[task_id]['task'].config['assignee']
             if self.update_task(self.tasks[task_id]['task']) is not None:
                 self.log.debug('Reported task as complete')
                 del self.tasks[task_id]
+                return True
         return False
 
     def start(self):
