@@ -58,7 +58,7 @@ class ExecuteShellWorker(worker_base.WorkerBase):
         else:
             wdir = self.tasks[task_id]['workspace']
 
-        cmd_and_args = [ "sh", script_name ]
+        cmd_and_args = [ "sh", "-e", script_name ]
         env = os.environ.copy()
         env['JOB_NAME'] = self.tasks[task_id]['task'].config['job_id']
         env['BUILD_NUMBER'] = self.tasks[task_id]['task'].config['build_number']
