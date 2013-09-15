@@ -6,9 +6,6 @@ Copyright (c) 2013 Heikki Nousiainen, F-Secure
 See LICENSE for details
 """
 
-# TODO: this implementation is rather naive, and needs to be refactored
-# TODO: this implementation is rather complex, and needs to be refactored
-
 import time
 import tempfile
 import copy
@@ -33,9 +30,8 @@ class BuildControlWorker(worker_base.WorkerBase):
         self.log.error('Failed to update build state, job %s build %s' % (self.build_states[task_key]['job_id'], self.build_states[task_key]['build_number']))
         return False
 
-    def prepare_build(self, task_key):
-        self.log.debug('Prepare build %s', task_key)
-        # fetch and store job configuration
+    def get_job_config(self, task_key):
+        self.log.debug('Get job config %s', task_key)
         if self.build_states[task_key].get('job_config') is None:
             for _ in range(self.worker_config.get('retry_count', 10)):
                 config = self.distci_client.jobs.get(self.build_states[task_key]['job_id'])
@@ -49,19 +45,26 @@ class BuildControlWorker(worker_base.WorkerBase):
                 return
 
         # update build state
-        if self.update_build_state(task_key) == False:
-            return
+        if self.update_build_state(task_key) == True:
+            self.build_states[task_key]['state'] = 'create-workspace'
+
+    def create_workspace(self, task_key):
+        self.log.debug('Create workspace for %s', task_key)
 
         # create and store empty workspace
         self.log.debug('Creating workspace')
         tmp_dir = tempfile.mkdtemp()
 
-        if self.send_workspace(self.build_states[task_key]['job_id'], self.build_states[task_key]['build_number'], tmp_dir) == True:
-            self.delete_workspace(tmp_dir)
-            self.build_states[task_key]['state'] = 'running'
-        else:
+        if self.send_workspace(self.build_states[task_key]['job_id'], self.build_states[task_key]['build_number'], tmp_dir) == False:
             self.log.error('Failed to store empty workspace')
             self.delete_workspace(tmp_dir)
+            return
+
+        self.delete_workspace(tmp_dir)
+
+        # update build state
+        if self.update_build_state(task_key) == True:
+            self.build_states[task_key]['state'] = 'running'
 
     def spawn_subtask(self, task_key, subtask_index):
         subtask_config = self.build_states[task_key]['job_config']['tasks'][subtask_index]
@@ -80,7 +83,7 @@ class BuildControlWorker(worker_base.WorkerBase):
                 'status': 'complete',
                 'result': 'error',
                 'error_message': 'Unknown subtask type %s' % subtask_config['type'] })
-            return
+            return True
 
         task_descr = { 'status': 'pending',
                        'job_id': self.build_states[task_key]['job_id'],
@@ -92,19 +95,20 @@ class BuildControlWorker(worker_base.WorkerBase):
         task_obj = self.post_new_task(task_obj)
         if task_obj is None:
             self.log.error('Failed to post new task for job %s build %s', self.build_states[task_key]['job_id'], self.build_states[task_key]['build_number'])
-            return
+            return False
 
         self.build_states[task_key]['build_state']['tasks'][subtask_index] = task_obj.config
         self.build_states[task_key]['build_state']['tasks'][subtask_index]['id'] = task_obj.id
-
-        if self.update_build_state(task_key) == False:
-            return
+        return True
 
     def update_state_after_subtask_completion(self, task_key, subtask_index):
         artifacts = self.build_states[task_key]['build_state']['tasks'][subtask_index].get('artifacts')
         if artifacts is not None:
             for artifact_id, path in artifacts.iteritems():
                 self.build_states[task_key]['build_state']['artifacts'][artifact_id] = path
+        if self.update_build_state(task_key) == False:
+            return False
+        return True
 
     def check_status_and_issue_tasks(self, task_key):
         self.log.debug('Checking status for %s', task_key)
@@ -118,6 +122,8 @@ class BuildControlWorker(worker_base.WorkerBase):
                 subtask = self.get_task(subtask_desc['id'])
                 if subtask is not None:
                     self.build_states[task_key]['build_state']['tasks'][subtask_index].update(subtask.config)
+                if self.update_build_state(task_key) == False:
+                    return
             if subtask_desc['status'] != 'complete':
                 return
             if subtask_desc['result'] != 'success':
@@ -125,7 +131,8 @@ class BuildControlWorker(worker_base.WorkerBase):
                 self.build_states[task_key]['build_state']['status'] = 'complete'
                 self.build_states[task_key]['build_state']['result'] = 'failure'
                 return
-            self.update_state_after_subtask_completion(task_key, subtask_index)
+            if self.update_state_after_subtask_completion(task_key, subtask_index) == False:
+                return
         self.build_states[task_key]['state'] = 'complete'
         self.build_states[task_key]['build_state']['status'] = 'complete'
         self.build_states[task_key]['build_state']['result'] = 'success'
@@ -171,7 +178,7 @@ class BuildControlWorker(worker_base.WorkerBase):
 
             if new_task is not None:
                 self.build_states[new_task.id] = {
-                    'state': 'prepare',
+                    'state': 'get-job-config',
                     'last_updated': int(time.time()),
                     'job_id': new_task.config.get('job_id'),
                     'build_number': new_task.config.get('build_number'),
@@ -183,8 +190,11 @@ class BuildControlWorker(worker_base.WorkerBase):
                     'task': new_task }
 
             for task_key in self.build_states.keys():
-                if self.build_states[task_key]['state'] == 'prepare':
-                    self.prepare_build(task_key)
+                if self.build_states[task_key]['state'] == 'get-job-config':
+                    self.get_job_config(task_key)
+
+                if self.build_states[task_key]['state'] == 'create-workspace':
+                    self.create_workspace(task_key)
 
                 if self.build_states[task_key]['state'] == 'running':
                     self.check_status_and_issue_tasks(task_key)
