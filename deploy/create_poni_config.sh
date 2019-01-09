@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/sh -eu
 
 if [ -z "$PONI_ROOT" ]
 then
